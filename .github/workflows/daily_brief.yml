@@ -19,48 +19,27 @@ on:
         type: boolean
 
 jobs:
-  generate-brief:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      - name: Restore seen papers from bot-data branch
-        run: |
-
-          git checkout -- .
-          git clean -fdX
-
-          mkdir -p data
-          
-          if git ls-remote --heads origin bot-data | grep -q bot-data; then
-            echo "发现远程分支 bot-data，尝试获取状态文件..."
-            git fetch origin bot-data
-            git show origin/bot-data:seen_papers.json > data/seen_papers.json 2>/dev/null || echo '[]' > data/seen_papers.json
-          else
-            echo "未发现远程分支 bot-data，创建新的状态文件。"
-            echo '[]' > data/seen_papers.json
-          fi
-
-          git checkout -f ${{ github.ref_name }}
-          echo "Seen papers count: $(python3 -c "import json; print(len(json.load(open('data/seen_papers.json'))))")"
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e .
+          pip install pyyaml requests feedparser lxml
 
-      - name: Run econ-brief pipeline
+      - name: Generate Brief
+        run: |
+          # 生成简报脚本
+          python -m econ_brief
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           OPENALEX_EMAIL: ${{ secrets.OPENALEX_EMAIL }}
@@ -70,24 +49,30 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
-        run: |
-          if [ "${{ github.event.inputs.fetch_only }}" = "true" ]; then
-            python -m econ_brief --fetch-only
-          else
-            python -m econ_brief
-          fi
+          GH_PAT: ${{ secrets.GH_PAT }}
+          LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || 3 }}
 
       - name: Commit briefing and state
-        if: success() || failure()
         run: |
           git config user.name "econ-brief-bot"
           git config user.email "bot@econ-brief.local"
-
-          # Commit generated briefing to main branch
-          if [ -f "output/briefings/$(date +%Y-%m-%d).md" ]; then
-            git add output/briefings/
-            git diff --staged --quiet || git commit -m "📊 Add briefing for $(date +%Y-%m-%d)"
+          
+          # 1. 确保我们还在正确的分支上
+          git checkout ${{ github.ref_name }}
+          
+          # 2. 添加我们要提交的文件（只添加简报和状态文件）
+          git add output/briefings/*.md || true
+          git add data/seen_papers.json || true
+          
+          # 3. 检查是否有变更需要提交
+          if git diff --cached --quiet; then
+            echo "没有需要提交的变更。"
+          else
+            echo "提交变更..."
+            git commit -m "📊 Update briefing and state [$(date +'%Y-%m-%d')]"
+            
+            # 4. 使用 GH_PAT 推送
+            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
           fi
 
           # Update seen_papers on bot-data branch
