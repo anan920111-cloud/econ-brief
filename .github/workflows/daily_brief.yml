@@ -32,13 +32,14 @@ jobs:
 
       - name: Restore seen papers from bot-data branch
         run: |
+          mkdir -p data
+          
           if git ls-remote --heads origin bot-data | grep -q bot-data; then
             git fetch origin bot-data
             git checkout origin/bot-data -- seen_papers.json 2>/dev/null && cp seen_papers.json data/seen_papers.json || echo '[]' > data/seen_papers.json
             git checkout ${{ github.ref_name }}
           else
             echo '[]' > data/seen_papers.json
-            mkdir -p data
           fi
           echo "Seen papers count: $(python3 -c "import json; print(len(json.load(open('data/seen_papers.json'))))")"
 
