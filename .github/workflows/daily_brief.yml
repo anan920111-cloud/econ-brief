@@ -37,9 +37,11 @@ jobs:
           git checkout -- .
           
           if git ls-remote --heads origin bot-data | grep -q bot-data; then
+            echo "发现远程分支 bot-data，尝试获取状态文件..."
             git fetch origin bot-data
             git show origin/bot-data:seen_papers.json > data/seen_papers.json 2>/dev/null || echo '[]' > data/seen_papers.json
           else
+            echo "未发现远程分支 bot-data，创建新的状态文件。"
             echo '[]' > data/seen_papers.json
           fi
 
