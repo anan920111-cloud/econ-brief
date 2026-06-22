@@ -28,7 +28,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use PAT for cross-branch operations (bot-data branch)
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Restore seen papers from bot-data branch
@@ -55,7 +54,7 @@ jobs:
 
       - name: Run econ-brief pipeline
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           OPENALEX_EMAIL: ${{ secrets.OPENALEX_EMAIL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -85,7 +84,6 @@ jobs:
 
           # Update seen_papers on bot-data branch
           if [ -f "data/seen_papers.json" ]; then
-            # Create an orphan commit for bot-data
             git checkout --orphan bot-data-temp 2>/dev/null || true
             git rm -rf --cached . 2>/dev/null || true
             cp data/seen_papers.json .
@@ -94,7 +92,6 @@ jobs:
             git commit -m "🔄 Update state [$(date +%Y-%m-%d)]"
             git push origin bot-data-temp:bot-data --force
 
-            # Return to main branch
             git checkout ${{ github.ref_name }}
           fi
 

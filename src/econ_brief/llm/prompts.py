@@ -1,4 +1,4 @@
-"""Prompt templates for the LLM pipeline."""
+"""Prompt templates for the DeepSeek LLM pipeline."""
 
 import logging
 from pathlib import Path
@@ -7,7 +7,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# Default prompts (embedded as fallback; config/prompts.yaml is the primary source)
+# ── Default prompts (embedded; config/prompts.yaml is the primary source) ──
 
 SCORER_SYSTEM_DEFAULT = """You are an economics research assistant at a top university. Your task is to
 evaluate the relevance and novelty of newly published economics papers for
@@ -149,8 +149,10 @@ Top papers:
 
 
 class PromptManager:
-    """Manage and load prompt templates, with YAML file as primary source
-    and hardcoded defaults as fallback."""
+    """Manage and load prompt templates.
+
+    YAML file is the primary source; hardcoded defaults are the fallback.
+    """
 
     def __init__(self, prompts_path: str | Path | None = None):
         self._prompts: dict = {}

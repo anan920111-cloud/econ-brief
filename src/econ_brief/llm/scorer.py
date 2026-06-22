@@ -1,4 +1,7 @@
-"""Stage 1: Claude Haiku relevance scoring and filtering."""
+"""Stage 1: DeepSeek relevance scoring and filtering.
+
+Uses deepseek-chat (V3) as the fast, cheap scoring model.
+"""
 
 import json
 import logging
@@ -9,16 +12,16 @@ from econ_brief.models.paper import Paper
 
 logger = logging.getLogger(__name__)
 
-# Default model — Haiku 4.5
-HAIKU_MODEL = "claude-haiku-4-5-20250514"
+# DeepSeek Chat (V3) — fast and cheap for scoring
+SCORER_MODEL = "deepseek-chat"
 BATCH_SIZE = 5  # Papers per API call for scoring
 
 
 class RelevanceScorer:
-    """Score papers by relevance using Claude Haiku (Stage 1).
+    """Score papers by relevance using DeepSeek Chat (Stage 1).
 
     This is the cheap filtering stage. Only papers scoring above the
-    threshold proceed to Stage 2 deep analysis with Sonnet.
+    threshold proceed to Stage 2 deep analysis.
     """
 
     def __init__(
@@ -29,14 +32,10 @@ class RelevanceScorer:
     ):
         self.client = client
         self.prompts = prompts or PromptManager()
-        self.model = model or HAIKU_MODEL
+        self.model = model or SCORER_MODEL
 
     def score_papers(self, papers: list[Paper]) -> list[Paper]:
-        """Score papers in batches. Sets relevance_score on each paper.
-
-        Returns the same list of papers, now with relevance_score,
-        topic_tags, novelty_flag, and scoring_reasoning populated.
-        """
+        """Score papers in batches. Sets relevance_score on each paper."""
         if not papers:
             return papers
 
@@ -52,7 +51,6 @@ class RelevanceScorer:
                 )
             except Exception as e:
                 logger.error("Scoring failed for batch %d: %s", i, e)
-                # Assign default scores so pipeline can continue
                 for p in batch:
                     p.relevance_score = 5.0
                     p.topic_tags = []
@@ -68,26 +66,18 @@ class RelevanceScorer:
 
     def _score_batch(self, batch: list[Paper]) -> None:
         """Score a batch of papers in one API call."""
-        # Format papers for the prompt
         papers_text = self._format_batch(batch)
-
-        # Build user prompt
         user_prompt = self.prompts.scorer_user.format(papers_text=papers_text)
 
-        # Call Haiku
         response_text = self.client.create_message(
             model=self.model,
             system_prompt=self.prompts.scorer_system,
             user_content=user_prompt,
             max_tokens=1024,
             temperature=0.3,
-            use_caching=True,
         )
 
-        # Parse JSON response
         scores = self._parse_response(response_text)
-
-        # Apply scores to papers
         for item in scores.get("papers", []):
             idx = item.get("paper_index", -1)
             if 0 <= idx < len(batch):
@@ -121,14 +111,11 @@ class RelevanceScorer:
 
     @staticmethod
     def _parse_response(text: str) -> dict:
-        """Parse the JSON response from Haiku, handling edge cases."""
-        # Try to find JSON in the response (handles cases where model adds markdown)
+        """Parse the JSON response, handling markdown wrapping."""
         text = text.strip()
 
-        # Remove markdown code fences if present
         if text.startswith("```"):
             lines = text.split("\n")
-            # Remove first and last line if they are fences
             if lines[0].startswith("```"):
                 lines = lines[1:]
             if lines and lines[-1].startswith("```"):
@@ -138,9 +125,8 @@ class RelevanceScorer:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            # Try to extract JSON object from the text
             import re
-            match = re.search(r'\{.*\}', text, re.DOTALL)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
             if match:
                 try:
                     return json.loads(match.group())

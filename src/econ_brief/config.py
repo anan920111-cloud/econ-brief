@@ -3,7 +3,6 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -50,10 +49,17 @@ class Config:
         self.lookback_days = int(os.environ.get("LOOKBACK_DAYS", "3"))
         self.openalex_email = os.environ.get("OPENALEX_EMAIL")
 
-        # LLM settings
-        self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        self.haiku_model = "claude-haiku-4-5-20250514"
-        self.sonnet_model = "claude-sonnet-4-20250514"
+        # ── DeepSeek API settings ──────────────────────────────────
+        self.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        self.deepseek_base_url = os.environ.get(
+            "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+        )
+        # Stage 1: fast/cheap model for scoring
+        self.scorer_model = os.environ.get("SCORER_MODEL", "deepseek-chat")
+        # Stage 2: primary model for deep analysis
+        self.analyzer_model = os.environ.get("ANALYZER_MODEL", "deepseek-chat")
+        # Optional: use deepseek-reasoner for higher-quality analysis
+        # self.analyzer_model = "deepseek-reasoner"
 
         # Relevance filter
         self.min_relevance_score = float(
@@ -99,7 +105,6 @@ class Config:
             intl_field = data.get("international_field", INTL_FIELD)
             chinese = data.get("chinese_journals", CHINESE_JOURNALS)
 
-            # Ensure tier field is set
             for j in intl_top5:
                 j.setdefault("tier", "intl_top5")
             for j in intl_field:

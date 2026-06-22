@@ -1,15 +1,15 @@
 # econ-brief — 经济学每日科研简报
 
-每天自动抓取国内外经济学顶级期刊的最新论文，利用 Claude AI 进行 10 维度深度分析，生成中英双语科研简报，通过邮件推送。
+每天自动抓取国内外经济学顶级期刊的最新论文，利用 DeepSeek AI 进行 10 维度深度分析，生成中英双语科研简报，通过邮件推送。
 
 ## 功能特性
 
 - 📰 **多源抓取**: 覆盖 12 本国际顶刊 + 9 本中文顶刊 + NBER 工作论文 + arXiv 预印本
-- 🤖 **AI 分析**: Claude 两阶段分析（Haiku 评分筛选 → Sonnet 10维深度分析）
+- 🤖 **AI 分析**: DeepSeek 两阶段分析（deepseek-chat 评分筛选 → deepseek-chat 10维深度分析）
 - 🌐 **中英双语**: 中文叙述 + 英文术语保留
 - 📧 **邮件推送**: 每天早上 8:17（北京时间）自动发送 HTML 邮件
 - 📝 **本地存档**: Markdown 简报自动提交到仓库
-- 💰 **极低成本**: ~$0.20/天，~$6/月
+- 💰 **极低成本**: ~$0.01/天，~$0.30/月（DeepSeek 价格极低）
 
 ## 覆盖期刊
 
@@ -45,7 +45,7 @@ NBER Working Papers · arXiv (econ.GN, econ.EM, econ.TH)
 ### 前置条件
 
 - Python 3.11+
-- [Anthropic API Key](https://console.anthropic.com/) (Claude)
+- [DeepSeek API Key](https://platform.deepseek.com/)（OpenAI 兼容接口）
 - SMTP 邮箱服务（推荐 [Brevo](https://www.brevo.com/) 免费 300 封/天）
 
 ### 1. 克隆并安装
@@ -62,7 +62,7 @@ pip install -e .
 
 | Secret | 说明 |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic Claude API 密钥 |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（从 platform.deepseek.com 获取） |
 | `OPENALEX_EMAIL` | 你的邮箱（用于 OpenAlex 高频率访问） |
 | `SMTP_HOST` | SMTP 服务器地址（如 `smtp.brevo.com`） |
 | `SMTP_PORT` | SMTP 端口（通常 `587`） |
@@ -83,10 +83,10 @@ pip install -e .
 
 ```bash
 # 测试抓取（不调用 LLM）
-ANTHROPIC_API_KEY=your_key python -m econ_brief --fetch-only
+DEEPSEEK_API_KEY=sk-xxx python -m econ_brief --fetch-only
 
 # 完整运行
-ANTHROPIC_API_KEY=your_key \
+DEEPSEEK_API_KEY=sk-xxx \
 SMTP_HOST=smtp.brevo.com \
 SMTP_PORT=587 \
 SMTP_USERNAME=your_login \
@@ -112,15 +112,16 @@ econ-brief/
 │   │   └── chinese_fetcher.py         #   中文期刊（NCPSSD + RSS）
 │   ├── models/paper.py                # 统一 Paper 数据模型
 │   ├── dedup/deduplicator.py          # 三重去重策略
-│   ├── llm/                           # LLM 分析管线
-│   │   ├── client.py                  #   Anthropic SDK 封装 + 缓存
-│   │   ├── scorer.py                  #   Stage 1: Haiku 评分
-│   │   ├── analyzer.py                #   Stage 2: Sonnet 深度分析
+│   ├── llm/                           # LLM 分析管线（DeepSeek）
+│   │   ├── client.py                  #   OpenAI SDK 封装（DeepSeek 兼容）
+│   │   ├── scorer.py                  #   Stage 1: deepseek-chat 评分
+│   │   ├── analyzer.py                #   Stage 2: deepseek-chat 深度分析
 │   │   └── prompts.py                 #   提示词模板
 │   ├── output/                        # 输出生成
 │   │   ├── markdown.py                #   Markdown 简报
 │   │   ├── email_html.py              #   HTML 邮件
-│   │   └── email_sender.py            #   SMTP 发送
+│   │   ├── email_sender.py            #   SMTP 发送
+│   │   └── templates/                 #   邮件模板
 │   └── state/tracker.py               # 状态持久化
 ├── config/
 │   ├── journals.yaml                  # 期刊配置
@@ -130,16 +131,41 @@ econ-brief/
 
 ## 成本估算
 
-| 项目 | 每天 | 每月 |
+DeepSeek API 定价（美元/百万 tokens）：
+
+| 模型 | 输入 | 输出 |
 |---|---|---|
-| Claude Haiku (Scoring) | $0.03 | $0.90 |
-| Claude Sonnet (Analysis) | $0.15 | $4.50 |
+| deepseek-chat (V3) | $0.27 | $1.10 |
+| deepseek-reasoner (R1) | $0.55 | $2.19 |
+
+预估使用量（每天 ~50 篇评分 + ~20 篇深度分析）：
+
+| 阶段 | 每次 Tokens | 每天 | 每月 |
+|---|---|---|---|
+| Stage 1: Scoring (deepseek-chat) | ~30K in / ~1K out | ~$0.0002 | ~$0.01 |
+| Stage 2: Analysis (deepseek-chat) | ~80K in / ~40K out | ~$0.001 | ~$0.03 |
+| Executive Summary | ~5K in / ~1K out | ~$0.0001 | ~$0.003 |
+| **LLM 总计** | | **~$0.001/天** | **~$0.04/月** |
+
+| 基础设施 | 每天 | 每月 |
+|---|---|---|
 | OpenAlex / arXiv / NBER API | 免费 | 免费 |
 | Brevo 邮件 | 免费 (300封/天) | 免费 |
 | GitHub Actions | 免费 (2000分钟/月) | 免费 |
-| **总计** | **~$0.20** | **~$5.40** |
+| **总计（含 LLM）** | **~$0.001** | **~$0.04** |
+
+> 💡 即使用 deepseek-reasoner 做深度分析，月成本也不到 $0.10。
 
 ## 自定义
+
+### 切换模型
+
+默认两个阶段都使用 `deepseek-chat` (V3)。如需更高质量的分析：
+
+```bash
+# 使用 DeepSeek-R1 做深度分析（推理能力更强，稍贵）
+export ANALYZER_MODEL=deepseek-reasoner
+```
 
 ### 调整期刊列表
 
@@ -147,11 +173,12 @@ econ-brief/
 
 ### 调整相关性阈值
 
-默认只分析评分 ≥ 6.0/10 的论文。在 Actions 中设置 `MIN_RELEVANCE_SCORE` 环境变量调整。
+默认只分析评分 ≥ 6.0/10 的论文：
 
-### 调整分析深度
-
-默认最多分析 30 篇论文。通过 `MAX_STAGE2_PAPERS` 环境变量调整。
+```bash
+export MIN_RELEVANCE_SCORE=7.0   # 更严格
+export MAX_STAGE2_PAPERS=15      # 更少论文
+```
 
 ## 已知限制
 
@@ -159,6 +186,7 @@ econ-brief/
 - **NBER API**: 使用非官方 API，未来可能变化（OpenAlex 有延迟收录可作为备用）
 - **GitHub Actions 延迟**: 调度可能延迟 5-30 分钟
 - **摘要依赖**: 分析质量取决于可用摘要的质量
+- **DeepSeek 并发限制**: 免费 API 有并发限制，但我们的顺序调用模式不受影响
 
 ## License
 

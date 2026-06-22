@@ -23,6 +23,7 @@ from econ_brief.state import StateTracker
 
 # ── Logging setup ──────────────────────────────────────────────────
 
+
 def setup_logging(verbose: bool = False) -> None:
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
@@ -30,13 +31,14 @@ def setup_logging(verbose: bool = False) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    # Quiet down noisy third-party loggers
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("arxiv").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
 
 
 # ── Pipeline steps ─────────────────────────────────────────────────
+
 
 async def run_pipeline(
     config,
@@ -44,18 +46,15 @@ async def run_pipeline(
     no_email: bool = False,
     dry_run: bool = False,
 ) -> int:
-    """Run the complete econ-brief pipeline.
-
-    Returns exit code (0 = success, 1 = error).
-    """
+    """Run the complete econ-brief pipeline. Returns exit code."""
     today = date.today()
     errors: list[str] = []
     logger = logging.getLogger("pipeline")
 
     # ── 0. Validate configuration ──────────────────────────────────
     if not dry_run and not fetch_only:
-        if not config.anthropic_api_key:
-            logger.error("ANTHROPIC_API_KEY environment variable is required")
+        if not config.deepseek_api_key:
+            logger.error("DEEPSEEK_API_KEY environment variable is required")
             return 1
 
     # ── 1. Fetch papers from all sources ───────────────────────────
@@ -78,7 +77,6 @@ async def run_pipeline(
         return 0
 
     if fetch_only or dry_run:
-        # Print summary and exit
         for p in all_papers[:20]:
             print(f"  [{p.source.value}] {p.title[:100]}")
         if len(all_papers) > 20:
@@ -98,16 +96,19 @@ async def run_pipeline(
         logger.info("No new papers after dedup. Exiting.")
         return 0
 
-    # ── 3. Stage 1: Relevance scoring (Haiku) ──────────────────────
+    # ── 3. Stage 1: Relevance scoring (deepseek-chat) ──────────────
     logger.info("=" * 60)
-    logger.info("PHASE 3: Stage 1 — Relevance scoring (Haiku)")
+    logger.info("PHASE 3: Stage 1 — Relevance scoring (DeepSeek)")
     logger.info("=" * 60)
 
-    client = LLMClient(api_key=config.anthropic_api_key)
+    client = LLMClient(
+        api_key=config.deepseek_api_key,
+        base_url=config.deepseek_base_url,
+    )
     scorer = RelevanceScorer(
         client=client,
         prompts=config.prompts,
-        model=config.haiku_model,
+        model=config.scorer_model,
     )
     scored_papers = scorer.score_papers(new_papers)
 
@@ -133,15 +134,15 @@ async def run_pipeline(
         dedup.save()
         return 0
 
-    # ── 4. Stage 2: Deep analysis (Sonnet) ─────────────────────────
+    # ── 4. Stage 2: Deep analysis (deepseek-chat) ──────────────────
     logger.info("=" * 60)
-    logger.info("PHASE 4: Stage 2 — Deep analysis (Sonnet)")
+    logger.info("PHASE 4: Stage 2 — Deep analysis (DeepSeek)")
     logger.info("=" * 60)
 
     analyzer = DeepAnalyzer(
         client=client,
         prompts=config.prompts,
-        model=config.sonnet_model,
+        model=config.analyzer_model,
     )
     analyzed_papers = analyzer.analyze_papers(top_papers)
 
@@ -157,7 +158,6 @@ async def run_pipeline(
     logger.info("PHASE 5: Generating outputs")
     logger.info("=" * 60)
 
-    # Markdown
     md_gen = MarkdownGenerator()
     md_content = md_gen.generate(
         analyzed_papers, summary, today, total_fetched
@@ -165,7 +165,6 @@ async def run_pipeline(
     md_path = md_gen.save(md_content, today)
     logger.info("Markdown briefing: %s", md_path)
 
-    # HTML email
     html_gen = EmailHTMLGenerator()
     html_content = html_gen.generate(
         analyzed_papers, summary, today, total_fetched
@@ -197,7 +196,6 @@ async def run_pipeline(
     dedup.mark_seen(analyzed_papers)
     dedup.save()
 
-    # Track run statistics
     tracker = StateTracker()
     tracker.record_run(
         papers_fetched=total_fetched,
@@ -220,10 +218,7 @@ async def run_pipeline(
                 usage["total_tokens"],
                 usage["input_tokens"],
                 usage["output_tokens"])
-    logger.info("  Cache: read=%d, write=%d tokens",
-                usage.get("cache_read_tokens", 0),
-                usage.get("cache_write_tokens", 0))
-    logger.info("  Estimated cost: $%.4f", usage["total_cost"])
+    logger.info("  Estimated cost: $%.6f", usage["total_cost"])
     logger.info("  Email sent: %s", email_sent)
     if errors:
         logger.warning("  Errors: %s", errors)
@@ -233,6 +228,7 @@ async def run_pipeline(
 
 
 # ── CLI ────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -275,7 +271,6 @@ def main():
 
     setup_logging(verbose=args.verbose)
 
-    # Ensure data/output directories exist
     os.makedirs("data", exist_ok=True)
     os.makedirs("output/briefings", exist_ok=True)
 

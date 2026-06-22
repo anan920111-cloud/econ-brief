@@ -8,9 +8,9 @@ authors = [{name = "Econ Brief Bot"}]
 readme = "README.md"
 
 dependencies = [
+    "openai>=1.60",
     "pyalex>=0.15",
     "arxiv>=2.1",
-    "anthropic>=0.40",
     "feedparser>=6.0",
     "jinja2>=3.1",
     "pyyaml>=6.0",

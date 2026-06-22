@@ -1,4 +1,7 @@
-"""Stage 2: Claude Sonnet deep 10-dimension analysis."""
+"""Stage 2: DeepSeek deep 10-dimension analysis.
+
+Uses deepseek-chat (V3) or deepseek-reasoner (R1) for detailed analysis.
+"""
 
 import json
 import logging
@@ -9,15 +12,15 @@ from econ_brief.models.paper import AnalysisResult, Paper
 
 logger = logging.getLogger(__name__)
 
-# Default model — Sonnet 4
-SONNET_MODEL = "claude-sonnet-4-20250514"
+# DeepSeek Chat (V3) — strong general reasoning, very cheap
+ANALYZER_MODEL = "deepseek-chat"
 
 
 class DeepAnalyzer:
-    """Deep paper analysis using Claude Sonnet (Stage 2).
+    """Deep paper analysis using DeepSeek (Stage 2).
 
-    Analyzes each paper across 10 structured dimensions, producing
-    detailed Chinese-language analysis with English technical terms.
+    Analyzes each paper across 10 structured dimensions in Chinese
+    with English technical terms preserved.
     """
 
     def __init__(
@@ -28,13 +31,10 @@ class DeepAnalyzer:
     ):
         self.client = client
         self.prompts = prompts or PromptManager()
-        self.model = model or SONNET_MODEL
+        self.model = model or ANALYZER_MODEL
 
     def analyze_papers(self, papers: list[Paper]) -> list[Paper]:
         """Analyze papers one at a time for depth.
-
-        Each paper gets a full 10-dimension analysis. Papers that fail
-        analysis get a partial AnalysisResult with error noted.
 
         Returns papers with analysis field populated.
         """
@@ -57,7 +57,6 @@ class DeepAnalyzer:
                     paper.title[:60],
                     e,
                 )
-                # Create a minimal analysis so output generation doesn't break
                 paper.analysis = AnalysisResult(
                     research_topic=f"分析失败: {e}",
                 )
@@ -78,14 +77,12 @@ class DeepAnalyzer:
         if not papers:
             return "今日无高相关度论文。"
 
-        # Build tier summary
         tier_counts: dict[str, int] = {}
         for p in papers:
             tier_name = p.journal_tier.value if p.journal_tier else "other"
             tier_counts[tier_name] = tier_counts.get(tier_name, 0) + 1
         tier_summary = ", ".join(f"{k}: {v}篇" for k, v in tier_counts.items())
 
-        # Build top papers summary
         top_papers_text = ""
         for i, p in enumerate(papers[:5]):
             top_papers_text += (
@@ -109,7 +106,6 @@ class DeepAnalyzer:
                 user_content=user_prompt,
                 max_tokens=1024,
                 temperature=0.3,
-                use_caching=True,
             )
         except Exception as e:
             logger.error("Summary generation failed: %s", e)
@@ -135,7 +131,6 @@ class DeepAnalyzer:
             user_content=user_prompt,
             max_tokens=2048,
             temperature=0.3,
-            use_caching=True,
         )
 
         result = self._parse_response(response_text, index)
@@ -145,10 +140,9 @@ class DeepAnalyzer:
 
     @staticmethod
     def _parse_response(text: str, paper_index: int) -> dict:
-        """Parse JSON response from Sonnet."""
+        """Parse JSON response, handling markdown code fences."""
         text = text.strip()
 
-        # Remove markdown code fences if present
         if text.startswith("```"):
             lines = text.split("\n")
             if lines[0].startswith("```"):
@@ -161,7 +155,7 @@ class DeepAnalyzer:
             return json.loads(text)
         except json.JSONDecodeError:
             import re
-            match = re.search(r'\{.*\}', text, re.DOTALL)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
             if match:
                 try:
                     return json.loads(match.group())

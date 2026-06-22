@@ -1,38 +1,46 @@
-"""Anthropic SDK wrapper with prompt caching and cost tracking."""
+"""DeepSeek API wrapper (OpenAI-compatible) with cost tracking."""
 
 import logging
-from typing import Optional
 
-import anthropic
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-# Pricing per million tokens (as of 2025-2026)
+# DeepSeek pricing per million tokens (USD, as of 2025-2026)
+# deepseek-chat (V3): $0.27/M input, $1.10/M output
+# deepseek-reasoner (R1): $0.55/M input, $2.19/M output
 PRICING = {
-    "claude-haiku-4-5-20250514": {
-        "input": 1.00,
-        "output": 5.00,
-        "cache_write": 1.25,
-        "cache_read": 0.10,
+    "deepseek-chat": {
+        "input": 0.27,
+        "output": 1.10,
     },
-    "claude-sonnet-4-20250514": {
-        "input": 3.00,
-        "output:": 15.00,
-        "cache_write": 3.75,
-        "cache_read": 0.30,
+    "deepseek-reasoner": {
+        "input": 0.55,
+        "output": 2.19,
     },
 }
 
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+
 
 class LLMClient:
-    """Wrapper around Anthropic SDK with caching and cost tracking."""
+    """Wrapper around OpenAI SDK targeting DeepSeek API.
 
-    def __init__(self, api_key: str):
-        self.client = anthropic.Anthropic(api_key=api_key)
+    DeepSeek's API is fully OpenAI-compatible. We use the standard
+    OpenAI client with a custom base_url and API key.
+
+    DeepSeek does not support Anthropic-style prompt caching, but
+    its pricing is so low ($0.27/1M input tokens) that caching is
+    unnecessary for our use case.
+    """
+
+    def __init__(self, api_key: str, base_url: str | None = None):
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url=base_url or DEEPSEEK_BASE_URL,
+        )
         self._total_input_tokens = 0
         self._total_output_tokens = 0
-        self._total_cache_write_tokens = 0
-        self._total_cache_read_tokens = 0
         self._total_cost = 0.0
 
     # ── Public API ────────────────────────────────────────────────
@@ -44,79 +52,64 @@ class LLMClient:
         user_content: str,
         max_tokens: int = 4096,
         temperature: float = 0.3,
-        use_caching: bool = True,
     ) -> str:
-        """Send a message to Claude and return the text response.
+        """Send a chat completion request to DeepSeek.
 
         Args:
-            model: Model ID string.
+            model: Model ID (e.g., "deepseek-chat", "deepseek-reasoner").
             system_prompt: System-level instructions.
             user_content: User message content.
             max_tokens: Maximum output tokens.
-            temperature: Sampling temperature (0.0-1.0).
-            use_caching: Whether to enable prompt caching on system prompt.
+            temperature: Sampling temperature (0.0-2.0).
 
         Returns:
             The model's text response.
         """
-        # Build system blocks with optional caching
-        system_blocks = self._build_system_blocks(system_prompt, use_caching)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=model,
+                messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                system=system_blocks,
-                messages=[{"role": "user", "content": user_content}],
             )
-        except anthropic.APIError as e:
-            logger.error("Anthropic API error: %s", e)
+        except Exception as e:
+            logger.error("DeepSeek API error: %s", e)
             raise
 
         # Track usage
         usage = response.usage
-        self._total_input_tokens += usage.input_tokens
-        self._total_output_tokens += usage.output_tokens
-
-        # Cache token tracking
-        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-        cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
-        self._total_cache_read_tokens += cache_read
-        self._total_cache_write_tokens += cache_write
+        input_tokens = usage.prompt_tokens
+        output_tokens = usage.completion_tokens
+        self._total_input_tokens += input_tokens
+        self._total_output_tokens += output_tokens
 
         # Cost calculation
-        pricing = PRICING.get(model, {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.30})
-        regular_input = usage.input_tokens - cache_read - cache_write
+        pricing = PRICING.get(model, {"input": 0.27, "output": 1.10})
         cost = (
-            (regular_input / 1_000_000) * pricing["input"]
-            + (cache_write / 1_000_000) * pricing.get("cache_write", pricing["input"] * 1.25)
-            + (cache_read / 1_000_000) * pricing.get("cache_read", pricing["input"] * 0.10)
-            + (usage.output_tokens / 1_000_000) * pricing["output"]
+            (input_tokens / 1_000_000) * pricing["input"]
+            + (output_tokens / 1_000_000) * pricing["output"]
         )
         self._total_cost += cost
 
         logger.debug(
-            "API call: model=%s, tokens(in=%d, out=%d, cache_read=%d, cache_write=%d), cost=$%.6f",
+            "API call: model=%s, tokens(in=%d, out=%d), cost=$%.6f",
             model,
-            usage.input_tokens,
-            usage.output_tokens,
-            cache_read,
-            cache_write,
+            input_tokens,
+            output_tokens,
             cost,
         )
 
-        # Extract text
-        content = response.content
-        if not content:
+        # Extract text from response
+        choices = response.choices
+        if not choices:
             return ""
 
-        # Get text from the first text block
-        for block in content:
-            if block.type == "text":
-                return block.text
-
-        return ""
+        return choices[0].message.content or ""
 
     # ── Statistics ────────────────────────────────────────────────
 
@@ -133,24 +126,6 @@ class LLMClient:
         return {
             "input_tokens": self._total_input_tokens,
             "output_tokens": self._total_output_tokens,
-            "cache_read_tokens": self._total_cache_read_tokens,
-            "cache_write_tokens": self._total_cache_write_tokens,
             "total_tokens": self.total_tokens,
             "total_cost": round(self._total_cost, 6),
         }
-
-    # ── Private helpers ───────────────────────────────────────────
-
-    @staticmethod
-    def _build_system_blocks(
-        system_prompt: str, use_caching: bool
-    ) -> list[dict]:
-        """Build system message blocks, optionally with cache control."""
-        if use_caching:
-            return [{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }]
-        else:
-            return [{"type": "text", "text": system_prompt}]
