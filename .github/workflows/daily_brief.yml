@@ -99,5 +99,9 @@ jobs:
             git add run_log.json 2>/dev/null || true
             git commit -m "🔄 Update state [$(date +'%Y-%m-%d')]"
             git push origin bot-data-temp:bot-data --force
-            git checkout ${{ github.ref_name }}
+            
+            # 强制清理并切换回主分支
+            git reset --hard
+            git clean -fd
+            git checkout ${{ github.ref_name }} --force
           fi
