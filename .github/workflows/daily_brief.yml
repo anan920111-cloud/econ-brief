@@ -32,9 +32,11 @@ jobs:
 
       - name: Restore seen papers from bot-data branch
         run: |
-          mkdir -p data
+
           git clean -fd
           git checkout -- .
+
+          mkdir -p data
           
           if git ls-remote --heads origin bot-data | grep -q bot-data; then
             echo "发现远程分支 bot-data，尝试获取状态文件..."
