@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>经济学每日简报 — {{ date }}</title>
+</head>
+<body style="margin: 0; padding: 0; background: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;">
+<div style="max-width: 680px; margin: 0 auto; padding: 20px;">
+
+  <!-- Header -->
+  <div style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 24px 24px 16px 24px; border-radius: 12px; margin-bottom: 20px;">
+    <h1 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 700;">📊 经济学每日科研简报</h1>
+    <div style="font-size: 14px; opacity: 0.9;">{{ date }} {{ weekday }} · Econ Research Brief</div>
+  </div>
+
+  <!-- Stats bar -->
+  <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 100px; background: white; border-radius: 8px; padding: 14px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+      <div style="font-size: 28px; font-weight: 700; color: #1e40af; line-height: 1.2;">{{ total_fetched }}</div>
+      <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">抓取论文</div>
+    </div>
+    <div style="flex: 1; min-width: 100px; background: white; border-radius: 8px; padding: 14px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+      <div style="font-size: 28px; font-weight: 700; color: #059669; line-height: 1.2;">{{ analyzed_count }}</div>
+      <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">高相关分析</div>
+    </div>
+  </div>
+
+  <!-- Executive Summary -->
+  <div style="background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+    <h2 style="color: #1f2937; margin: 0 0 12px 0; font-size: 18px;">📋 今日摘要 Executive Summary</h2>
+    <div style="color: #374151; line-height: 1.7; font-size: 14px;">
+      {{ summary | replace('\n', '<br>') | safe }}
+    </div>
+  </div>
+
+  <!-- Papers by tier -->
+  {% for tier in [tier_labels.keys()|list] %}
+  {% if groups.get(tier) %}
+  {% set tier_papers = groups[tier] %}
+  {% set label = tier_labels.get(tier, tier.value) %}
+
+  <h2 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin: 24px 0 12px 0; font-size: 18px;">
+    {{ label }} ({{ tier_papers|length }}篇)
+  </h2>
+
+  {% for paper in tier_papers %}
+  <!-- Paper card -->
+  <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px 20px; margin: 12px 0; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+
+    <!-- Title + score -->
+    <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
+      {% if paper.relevance_score >= 8 %}
+      {% set badge = '#22c55e' %}
+      {% elif paper.relevance_score >= 6 %}
+      {% set badge = '#eab308' %}
+      {% else %}
+      {% set badge = '#9ca3af' %}
+      {% endif %}
+      <span style="background: {{ badge }}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
+        {{ "%.1f"|format(paper.relevance_score) }}
+      </span>
+      <h3 style="margin: 0; font-size: 16px; color: #111827; line-height: 1.4;">
+        {{ paper.display_title }}
+      </h3>
+    </div>
+
+    <!-- Journal + date -->
+    <div style="color: #6b7280; font-size: 13px; margin-bottom: 8px;">
+      {% if paper.journal %}<strong>{{ paper.journal }}</strong>{% endif %}
+      {% if paper.journal and paper.publication_date %} · {% endif %}
+      {{ paper.publication_date or '' }}
+    </div>
+
+    <!-- Authors -->
+    <div style="color: #374151; font-size: 14px; margin-bottom: 4px;">
+      <strong>作者:</strong> {{ paper.author_string[:300] }}
+    </div>
+
+    <!-- Affiliations -->
+    {% if paper.affiliation_string %}
+    <div style="color: #374151; font-size: 14px; margin-bottom: 8px;">
+      <strong>机构:</strong> {{ paper.affiliation_string[:300] }}
+    </div>
+    {% endif %}
+
+    <!-- Topic tags -->
+    {% if paper.topic_tags %}
+    <div style="margin-bottom: 8px;">
+      {% for tag in paper.topic_tags[:5] %}
+      <span style="display: inline-block; background: #eff6ff; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin: 2px;">{{ tag }}</span>
+      {% endfor %}
+      {% if paper.novelty_flag %}
+      <span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin: 2px;">新颖度: {{ paper.novelty_flag }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Links -->
+    <div style="margin-bottom: 12px; font-size: 13px;">
+      {% if paper.doi %}
+      <a href="https://doi.org/{{ paper.doi }}" style="color: #3b82f6; margin-right: 12px;">📄 DOI</a>
+      {% endif %}
+      {% if paper.source_url %}
+      <a href="{{ paper.source_url }}" style="color: #3b82f6; margin-right: 12px;">🔗 原文</a>
+      {% endif %}
+      {% if paper.pdf_url and paper.is_open_access %}
+      <a href="{{ paper.pdf_url }}" style="color: #059669;">📥 PDF</a>
+      {% endif %}
+    </div>
+
+    <!-- 10-dimension analysis -->
+    {% if paper.analysis %}
+    {% set ad = paper.analysis.to_dict() %}
+    {% set dims = [
+      ('research_topic', '研究主题 Research Topic'),
+      ('methodology_data', '方法与数据 Methodology & Data'),
+      ('innovation', '创新点 Innovation'),
+      ('theoretical_framework', '理论框架 Theoretical Framework'),
+      ('empirical_strategy', '实证策略 Empirical Strategy'),
+      ('key_findings', '主要发现 Key Findings'),
+      ('writing_approach', '写作特点 Writing Approach'),
+      ('limitations', '局限性 Limitations'),
+      ('extensions', '可扩展方向 Extensions'),
+      ('china_relevance', '对中国研究的启示 China Relevance'),
+    ] %}
+    {% for key, label in dims %}
+    {% if ad.get(key) %}
+    <div style="margin: 6px 0; background: #f9fafb; border-radius: 6px; padding: 8px 12px;">
+      <strong style="color: #374151; font-size: 13px;">{{ label }}</strong>
+      <p style="margin: 4px 0 0 0; color: #4b5563; line-height: 1.6; font-size: 13px;">
+        {{ ad[key] | replace('\n', '<br>') | safe }}
+      </p>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
+  </div>
+  {% endfor %}
+  {% endif %}
+  {% endfor %}
+
+  <!-- Footer -->
+  <div style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 32px; padding: 16px; border-top: 1px solid #e5e7eb;">
+    Generated by <strong>econ-brief</strong> v0.1.0 · 基于 Claude (Anthropic) 分析<br>
+    This is an automated research briefing. Manage settings in the GitHub repository.
+  </div>
+
+</div>
+</body>
+</html>

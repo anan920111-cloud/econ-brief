@@ -1,0 +1,106 @@
+# Journal configuration for econ-brief
+# Customize this file to add/remove journals or adjust settings.
+
+international_top5:
+  - name: "American Economic Review"
+    issn: "0002-8282"
+    publisher: "AEA"
+    has_rss: false
+  - name: "Econometrica"
+    issn: "0012-9682"
+    publisher: "Wiley / Econometric Society"
+    has_rss: true
+    rss_url: "https://onlinelibrary.wiley.com/feed/14680262"
+  - name: "Journal of Political Economy"
+    issn: "0022-3808"
+    publisher: "University of Chicago Press"
+    has_rss: false
+  - name: "Quarterly Journal of Economics"
+    issn: "0033-5533"
+    publisher: "Oxford University Press"
+    has_rss: true
+    rss_url: "https://academic.oup.com/rss/site_5504/3365.xml"
+  - name: "Review of Economic Studies"
+    issn: "0034-6527"
+    publisher: "Oxford University Press"
+    has_rss: true
+    rss_url: "https://academic.oup.com/rss/site_5508/3404.xml"
+
+international_field:
+  - name: "Journal of Finance"
+    issn: "0022-1082"
+    publisher: "Wiley / AFA"
+    has_rss: true
+    rss_url: "https://onlinelibrary.wiley.com/feed/15406261"
+  - name: "Journal of Financial Economics"
+    issn: "0304-405X"
+    publisher: "Elsevier"
+    has_rss: false
+  - name: "Journal of Econometrics"
+    issn: "0304-4076"
+    publisher: "Elsevier"
+    has_rss: false
+  - name: "AEJ: Applied Economics"
+    issn: "1945-7782"
+    publisher: "AEA"
+    has_rss: false
+  - name: "AEJ: Economic Policy"
+    issn: "1945-7731"
+    publisher: "AEA"
+    has_rss: false
+  - name: "AEJ: Macroeconomics"
+    issn: "1945-7707"
+    publisher: "AEA"
+    has_rss: false
+  - name: "AEJ: Microeconomics"
+    issn: "1945-7669"
+    publisher: "AEA"
+    has_rss: false
+
+chinese_journals:
+  - name: "经济研究"
+    name_en: "Economic Research Journal"
+    issn: "0577-9154"
+  - name: "管理世界"
+    name_en: "Management World"
+    issn: "1002-5502"
+  - name: "中国社会科学"
+    name_en: "Social Sciences in China"
+    issn: "1002-4921"
+  - name: "数量经济技术经济研究"
+    name_en: "Journal of Quantitative & Technological Economics"
+    issn: "1000-3894"
+  - name: "世界经济"
+    name_en: "The Journal of World Economy"
+    issn: "1002-9621"
+  - name: "中国工业经济"
+    name_en: "China Industrial Economics"
+    issn: "1006-480X"
+  - name: "经济学季刊"
+    name_en: "China Economic Quarterly"
+    issn: "2095-1086"
+  - name: "金融研究"
+    name_en: "Journal of Financial Research"
+    issn: "1002-7246"
+  - name: "中国农村经济"
+    name_en: "Chinese Rural Economy"
+    issn: "1002-8870"
+    rss_url: "https://zgncjj.ajcass.com/RSS/CN"
+
+# ArXiv categories to monitor
+arxiv_categories:
+  - econ.GN  # General Economics
+  - econ.EM  # Econometrics
+  - econ.TH  # Theoretical Economics
+
+# Fetch settings
+fetch:
+  lookback_days: 3  # How many days back to fetch (covers weekends)
+  openalex_per_page: 50
+  arxiv_max_results: 200
+  nber_per_page: 100
+
+# Relevance filter
+relevance:
+  min_score: 6.0  # Minimum Haiku relevance score (1-10)
+  max_papers_stage2: 30  # Cap on papers going to Stage 2 deep analysis
