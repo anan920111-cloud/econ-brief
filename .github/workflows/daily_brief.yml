@@ -33,8 +33,8 @@ jobs:
       - name: Restore seen papers from bot-data branch
         run: |
 
-          git clean -fd
           git checkout -- .
+          git clean -fdX
 
           mkdir -p data
           
