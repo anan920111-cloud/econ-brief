@@ -47,7 +47,7 @@ jobs:
             echo '[]' > data/seen_papers.json
           fi
 
-          git checkout ${{ github.ref_name }} --force
+          git checkout -f ${{ github.ref_name }}
           echo "Seen papers count: $(python3 -c "import json; print(len(json.load(open('data/seen_papers.json'))))")"
 
       - name: Setup Python
