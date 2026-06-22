@@ -2,8 +2,6 @@ name: Daily Economics Brief
 
 on:
   schedule:
-    # 0:17 UTC = 8:17 AM Beijing Time (UTC+8)
-    # Off-minute to avoid GitHub Actions cron stampede
     - cron: "17 0 * * *"
   workflow_dispatch:
     inputs:
@@ -21,9 +19,27 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Restore seen papers from bot-data branch
+        run: |
+          mkdir -p data
+          
+          if git ls-remote --heads origin bot-data | grep -q bot-data; then
+            git fetch origin bot-data
+            git checkout origin/bot-data -- seen_papers.json 2>/dev/null && cp seen_papers.json data/seen_papers.json || echo '[]' > data/seen_papers.json
+            git checkout ${{ github.ref_name }}
+          else
+            echo '[]' > data/seen_papers.json
+          fi
+          echo "Seen papers count: $(python3 -c "import json; print(len(json.load(open('data/seen_papers.json'))))")"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -38,8 +54,11 @@ jobs:
 
       - name: Generate Brief
         run: |
-          # 生成简报脚本
-          python -m econ_brief
+          if [ "${{ github.event.inputs.fetch_only }}" = "true" ]; then
+            python -m econ_brief --fetch-only
+          else
+            python -m econ_brief
+          fi
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           OPENALEX_EMAIL: ${{ secrets.OPENALEX_EMAIL }}
@@ -49,47 +68,36 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-          LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || 3 }}
+          LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
 
-      - name: Commit briefing and state
+      - name: Commit and push changes
+        if: success() || failure()
         run: |
           git config user.name "econ-brief-bot"
           git config user.email "bot@econ-brief.local"
+
+          # 1. 提交简报和状态文件到 main 分支
+          git add output/briefings/*.md 2>/dev/null || true
+          git add data/seen_papers.json 2>/dev/null || true
           
-          # 1. 确保我们还在正确的分支上
-          git checkout ${{ github.ref_name }}
-          
-          # 2. 添加我们要提交的文件（只添加简报和状态文件）
-          git add output/briefings/*.md || true
-          git add data/seen_papers.json || true
-          
-          # 3. 检查是否有变更需要提交
           if git diff --cached --quiet; then
             echo "没有需要提交的变更。"
           else
             echo "提交变更..."
             git commit -m "📊 Update briefing and state [$(date +'%Y-%m-%d')]"
-            
-            # 4. 使用 GH_PAT 推送
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
+            git push origin ${{ github.ref_name }}
           fi
 
-          # Update seen_papers on bot-data branch
+          # 2. 更新 bot-data 分支（独立存储状态）
           if [ -f "data/seen_papers.json" ]; then
+            echo "更新 bot-data 分支..."
             git checkout --orphan bot-data-temp 2>/dev/null || true
             git rm -rf --cached . 2>/dev/null || true
             cp data/seen_papers.json .
             cp data/run_log.json . 2>/dev/null || true
-            git add seen_papers.json run_log.json 2>/dev/null || git add seen_papers.json
-            git commit -m "🔄 Update state [$(date +%Y-%m-%d)]"
+            git add seen_papers.json 2>/dev/null || true
+            git add run_log.json 2>/dev/null || true
+            git commit -m "🔄 Update state [$(date +'%Y-%m-%d')]"
             git push origin bot-data-temp:bot-data --force
-
             git checkout ${{ github.ref_name }}
           fi
-
-      - name: Push changes
-        if: success() || failure()
-        run: |
-          git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-          git push origin ${{ github.ref_name }}
