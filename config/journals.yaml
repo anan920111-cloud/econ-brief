@@ -108,6 +108,7 @@ chinese_journals:
     issn: "1001-9952"
     has_rss: true
     rss_url: "https://qks.shufe.edu.cn/J/CJYJ/RSS/CN"
+    
 
 # ArXiv categories to monitor
 arxiv_categories:
