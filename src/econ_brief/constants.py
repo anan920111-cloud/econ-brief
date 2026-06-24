@@ -218,7 +218,16 @@ NBER_API_URL = (
 # NCPSSD base URL
 NCPSSD_BASE = "https://m.ncpssd.cn"
 
-# Chinese journal RSS URLs (verified or highly likely)
+# Chinese journal RSS feeds (知网 RSS - 用户确认地址)
 CHINESE_RSS_URLS: dict[str, str] = {
-    "中国农村经济": "https://zgncjj.ajcass.com/RSS/CN",
+    "经济研究": "https://rss.cnki.net/knavi/rss/JJYJ?pcode=CJFD,CCJD",
+    "管理世界": "https://rss.cnki.net/knavi/rss/GLSJ?pcode=CJFD,CCJD",
+    "中国社会科学": "https://rss.cnki.net/knavi/rss/ZSHK?pcode=CJFD,CCJD",
+    "数量经济技术经济研究": "https://rss.cnki.net/knavi/rss/SLJY?pcode=CJFD,CCJD",
+    "世界经济": "https://rss.cnki.net/knavi/rss/SJJJ?pcode=CJFD,CCJD",
+    "中国工业经济": "https://rss.cnki.net/knavi/rss/GGYY?pcode=CJFD,CCJD",
+    "经济学季刊": "https://rss.cnki.net/knavi/rss/JJXU?pcode=CJFD,CCJD",
+    "金融研究": "https://rss.cnki.net/knavi/rss/JRYJ?pcode=CJFD,CCJD",
+    "中国农村经济": "https://rss.cnki.net/knavi/rss/ZNJJ?pcode=CJFD,CCJD",
+    "财经研究": "https://qks.shufe.edu.cn/J/CJYJ/RSS/CN",
 }
