@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 from datetime import date, timedelta
 
 import httpx
@@ -17,6 +18,11 @@ from econ_brief.fetchers.base import AbstractFetcher
 from econ_brief.models.paper import Author, Paper, PaperSource, JournalTier
 
 logger = logging.getLogger(__name__)
+
+_USER_AGENTS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+]
 
 
 class NBERFetcher(AbstractFetcher):
@@ -35,15 +41,24 @@ class NBERFetcher(AbstractFetcher):
         async with httpx.AsyncClient(
             timeout=30,
             headers={
-                "User-Agent": "econ-brief/0.1 (research automation bot; contact via GitHub)"
+                "User-Agent": random.choice(_USER_AGENTS),
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
             },
         ) as client:
             page = 1
             while True:
                 try:
                     data = await self._fetch_page(client, page)
+                except httpx.HTTPStatusError as e:
+                    logger.warning(
+                        "NBER page %d returned HTTP %d (may be blocking CI IPs)",
+                        page,
+                        e.response.status_code,
+                    )
+                    break
                 except Exception as e:
-                    logger.error("NBER page %d fetch failed: %s", page, e)
+                    logger.warning("NBER page %d fetch failed: %s", page, e)
                     break
 
                 results = data.get("results", [])
