@@ -97,7 +97,7 @@ chinese_journals:
     name_en: "Journal of Financial Research"
     issn: "1002-7246"
     has_rss: true
-    rss_url: "http://rss.cnki.net/rss/rss.aspx?journal=JRYJ&Virtual=grid20&DBCode=CJFD"
+    rss_url: "https://rss.cnki.net/knavi/rss/JRYJ?pcode=CJFD,CCJD"
   - name: "中国农村经济"
     name_en: "Chinese Rural Economy"
     issn: "1002-8870"
