@@ -115,8 +115,9 @@ async def run_pipeline(
     # Filter by relevance — separate thresholds for EN and ZH
     # DeepSeek scores Chinese papers lower on average, so we use a lower
     # cutoff for zh papers to avoid unfairly filtering them out.
-    top_papers: list = []
-    en_count = zh_count = 0
+    # Also enforce a minimum Chinese paper quota for Stage 2.
+    en_papers: list = []
+    zh_papers: list = []
     for p in scored_papers:
         threshold = (
             config.min_relevance_score_zh
@@ -124,23 +125,44 @@ async def run_pipeline(
             else config.min_relevance_score
         )
         if (p.relevance_score or 0) >= threshold:
-            top_papers.append(p)
             if p.language == "zh":
-                zh_count += 1
+                zh_papers.append(p)
             else:
-                en_count += 1
+                en_papers.append(p)
 
+    # Fill Chinese quota: if not enough zh papers passed threshold,
+    # pull in the next-best Chinese papers by score
+    if len(zh_papers) < config.min_chinese_stage2:
+        # Collect zh papers that didn't make the cut, sorted by score
+        remaining_zh = sorted(
+            [p for p in scored_papers if p.language == "zh" and p not in zh_papers],
+            key=lambda p: p.relevance_score or 0,
+            reverse=True,
+        )
+        needed = config.min_chinese_stage2 - len(zh_papers)
+        zh_papers.extend(remaining_zh[:needed])
+        if needed > 0 and remaining_zh:
+            logger.info(
+                "Chinese quota: added %d extra zh papers (below threshold) "
+                "to meet minimum of %d",
+                min(needed, len(remaining_zh)),
+                config.min_chinese_stage2,
+            )
+
+    # Merge and sort by score
+    top_papers = en_papers + zh_papers
     top_papers.sort(key=lambda p: p.relevance_score or 0, reverse=True)
     top_papers = top_papers[: config.max_stage2_papers]
 
     logger.info(
-        "Papers above relevance threshold (EN≥%.1f, ZH≥%.1f): %d "
-        "(EN=%d, ZH=%d, capped at %d)",
+        "Papers above relevance threshold (EN≥%.1f, ZH≥%.1f, min_zh=%d): "
+        "%d (EN=%d, ZH=%d, capped at %d)",
         config.min_relevance_score,
         config.min_relevance_score_zh,
+        config.min_chinese_stage2,
         len(top_papers),
-        en_count,
-        zh_count,
+        len([p for p in top_papers if p.language != "zh"]),
+        len([p for p in top_papers if p.language == "zh"]),
         config.max_stage2_papers,
     )
 

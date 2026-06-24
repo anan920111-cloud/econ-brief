@@ -69,6 +69,10 @@ class Config:
         self.min_relevance_score_zh = float(
             os.environ.get("MIN_RELEVANCE_SCORE_ZH", "4.0")
         )
+        # Guaranteed minimum Chinese papers in Stage 2 (regardless of score)
+        self.min_chinese_stage2 = int(
+            os.environ.get("MIN_CHINESE_STAGE2", "5")
+        )
         self.max_stage2_papers = int(
             os.environ.get("MAX_STAGE2_PAPERS", "30")
         )

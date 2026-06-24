@@ -1,8 +1,11 @@
-"""Chinese journal fetcher — multi-strategy: RSS (via httpx) + NCPSSD scraping.
+"""Chinese journal fetcher — RSS via curl_cffi (TLS fingerprint impersonation).
 
-CNKI RSS feeds are blocked (HTTP 418) from datacenter IPs (GitHub Actions, etc.).
-In CI environments, CNKI RSS is skipped automatically. Set FORCE_CHINESE_RSS=true
-to override. Local runs from Chinese residential IPs should work normally.
+CNKI blocks all non-browser TLS fingerprints with HTTP 418. curl_cffi
+impersonates Chrome's TLS handshake at the network level, which httpx
+cannot do (httpx uses Python's ssl module, detectable by WAFs).
+
+In CI environments, CNKI RSS is skipped automatically (datacenter IPs
+are blocked regardless). Local runs from any IP use curl_cffi.
 """
 
 import urllib3
@@ -30,22 +33,22 @@ from econ_brief.models.paper import Author, Paper, PaperSource, JournalTier
 
 logger = logging.getLogger(__name__)
 
-# Browser-like User-Agent pool to rotate through — avoids CNKI 418 blocking
 _USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
 ]
+
+# curl_cffi browser impersonation targets (rotated to avoid fingerprinting)
+_IMPERSONATE_TARGETS = ["chrome124", "chrome120", "safari17_0"]
 
 
 def _is_ci_environment() -> bool:
     """Detect if we're running in a CI/CD environment."""
     return bool(
-        os.environ.get("CI")  # Generic CI indicator
-        or os.environ.get("GITHUB_ACTIONS")  # GitHub Actions
-        or os.environ.get("GITLAB_CI")  # GitLab CI
-        or os.environ.get("JENKINS_URL")  # Jenkins
+        os.environ.get("CI")
+        or os.environ.get("GITHUB_ACTIONS")
+        or os.environ.get("GITLAB_CI")
+        or os.environ.get("JENKINS_URL")
     )
 
 
@@ -54,25 +57,48 @@ def _force_rss() -> bool:
     return os.environ.get("FORCE_CHINESE_RSS", "").lower() in ("true", "1", "yes")
 
 
-class ChineseJournalFetcher(AbstractFetcher):
-    """Fetch new papers from Chinese journals via NCPSSD and RSS.
+def _fetch_url_with_curl(url: str, timeout: int = 30) -> tuple[int, str]:
+    """Fetch a URL using curl_cffi with Chrome TLS impersonation.
 
-    Strategy (priority order):
-    1. RSS feeds (where available — fastest, most reliable)
-    2. NCPSSD scraping (free, covers ~2400 journals)
-    3. (Future) Direct journal TOC page crawling
-
-    Note: OpenAlex also covers some Chinese journals; that is handled
-    separately by the OpenAlexFetcher. This fetcher is supplementary.
+    Returns (status_code, response_text).
+    Must be called from a thread — curl_cffi is synchronous.
     """
+    # Import here so the module can be imported even without curl_cffi
+    from curl_cffi import requests as curl_requests
+
+    impersonate = random.choice(_IMPERSONATE_TARGETS)
+    headers = {
+        "User-Agent": random.choice(_USER_AGENTS),
+        "Accept": "application/rss+xml, application/xml, text/xml, */*;q=0.9",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+    }
+
+    resp = curl_requests.get(
+        url,
+        headers=headers,
+        impersonate=impersonate,
+        timeout=timeout,
+        verify=False,  # CNKI may have SSL quirks
+    )
+    return resp.status_code, resp.text
+
+
+def _curl_is_available() -> bool:
+    """Check if curl_cffi is installed."""
+    try:
+        import curl_cffi  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+class ChineseJournalFetcher(AbstractFetcher):
+    """Fetch new papers from Chinese journals via RSS + NCPSSD scraping."""
 
     def __init__(self, journals: list[dict]):
-        """
-        Args:
-            journals: List of Chinese journal configs with keys: name, issn, name_en.
-        """
         self.journals = journals
-        # Build lookup by name for RSS URLs
         self._journal_names = {j["name"]: j for j in journals}
 
     def source_name(self) -> str:
@@ -82,7 +108,7 @@ class ChineseJournalFetcher(AbstractFetcher):
         cutoff = self._cutoff_date(lookback_days)
         papers: list[Paper] = []
 
-        # Strategy 1: RSS feeds (CNKI — blocked in CI environments)
+        # Strategy 1: RSS feeds
         in_ci = _is_ci_environment()
         force = _force_rss()
 
@@ -92,7 +118,7 @@ class ChineseJournalFetcher(AbstractFetcher):
                 "(blocked by CNKI anti-bot protection). "
                 "Chinese papers will come from OpenAlex only. "
                 "Set FORCE_CHINESE_RSS=true to override, "
-                "or run locally from a Chinese IP for full coverage."
+                "or run locally for full coverage."
             )
         else:
             if in_ci and force:
@@ -101,7 +127,7 @@ class ChineseJournalFetcher(AbstractFetcher):
             papers.extend(rss_papers)
             logger.info("Chinese RSS: %d papers", len(rss_papers))
 
-        # Strategy 2: NCPSSD scraping (for journals not covered by RSS)
+        # Strategy 2: NCPSSD scraping
         rss_covered = set(CHINESE_RSS_URLS.keys())
         ncpssd_journals = [
             j for j in self.journals if j["name"] not in rss_covered
@@ -114,101 +140,126 @@ class ChineseJournalFetcher(AbstractFetcher):
         return papers
 
     async def _fetch_rss(self, cutoff: date) -> list[Paper]:
-        """Fetch papers from Chinese journal RSS feeds using httpx.
+        """Fetch papers from CNKI RSS feeds using curl_cffi.
 
-        Uses browser-like User-Agent headers to avoid CNKI 418 anti-bot
-        responses. feedparser.parse() is NOT called directly on URLs —
-        the feed content is fetched via httpx first, then parsed locally.
+        curl_cffi impersonates Chrome's TLS fingerprint, bypassing CNKI's
+        WAF that blocks httpx/requests (detectable Python TLS signatures).
+        Falls back to httpx if curl_cffi is not installed.
         """
         papers: list[Paper] = []
 
-        # Use a single httpx client with browser-mimicking headers
+        if not _curl_is_available():
+            logger.warning(
+                "curl_cffi not installed — CNKI RSS will likely fail with 418. "
+                "Install it with: pip install curl_cffi"
+            )
+            return await self._fetch_rss_httpx(cutoff)
+
+        for journal_name, rss_url in CHINESE_RSS_URLS.items():
+            journal_info = self._journal_names.get(journal_name)
+            if not journal_info:
+                continue
+
+            try:
+                # Run synchronous curl_cffi in a thread to keep the event loop free
+                status, text = await asyncio.to_thread(
+                    _fetch_url_with_curl, rss_url, timeout=30
+                )
+
+                if status == 418:
+                    logger.warning(
+                        "CNKI still blocking RSS for %s (418) even with TLS "
+                        "impersonation. CNKI may be using additional detection.",
+                        journal_name,
+                    )
+                    continue
+
+                if status != 200:
+                    logger.warning(
+                        "RSS fetch for %s returned HTTP %d", journal_name, status
+                    )
+                    continue
+
+                feed = feedparser.parse(text)
+                if feed.bozo:
+                    logger.warning(
+                        "RSS parse error for %s: %s", journal_name, feed.bozo
+                    )
+                    continue
+
+                for entry in feed.entries:
+                    pub_date = self._parse_feed_date(entry)
+                    if pub_date and pub_date < cutoff:
+                        continue
+                    paper = self._rss_entry_to_paper(entry, journal_info, pub_date)
+                    if paper:
+                        papers.append(paper)
+
+                logger.info(
+                    "RSS: %d papers from %s", len(feed.entries), journal_name
+                )
+
+            except Exception as e:
+                logger.warning("RSS fetch failed for %s: %s", journal_name, e)
+
+            # Polite delay
+            await asyncio.sleep(random.uniform(1.0, 2.0))
+
+        return papers
+
+    async def _fetch_rss_httpx(self, cutoff: date) -> list[Paper]:
+        """Fallback RSS fetch using httpx (likely to get 418 from CNKI)."""
+        papers: list[Paper] = []
+
         headers = {
             "User-Agent": random.choice(_USER_AGENTS),
             "Accept": "application/rss+xml, application/xml, text/xml, */*;q=0.9",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
         }
 
         async with httpx.AsyncClient(
-            timeout=30,
-            verify=False,  # Disable SSL verification for CNKI compatibility
-            headers=headers,
-            follow_redirects=True,
-            http2=True,  # CNKI supports HTTP/2
+            timeout=30, verify=False, headers=headers, follow_redirects=True,
         ) as client:
             for journal_name, rss_url in CHINESE_RSS_URLS.items():
                 journal_info = self._journal_names.get(journal_name)
                 if not journal_info:
                     continue
-
                 try:
                     resp = await client.get(rss_url)
                     if resp.status_code == 418:
                         logger.warning(
-                            "CNKI blocked RSS fetch for %s (418 anti-bot). "
-                            "This is CNKI's restriction, not a network issue. "
-                            "Consider using alternative sources.",
+                            "CNKI blocked RSS fetch for %s (418 anti-bot).",
                             journal_name,
                         )
                         continue
                     resp.raise_for_status()
-
-                    # Parse the fetched XML/feed content locally
                     feed = feedparser.parse(resp.text)
                     if feed.bozo:
-                        logger.warning(
-                            "RSS parse error for %s: %s", journal_name, feed.bozo
-                        )
+                        logger.warning("RSS parse error for %s: %s", journal_name, feed.bozo)
                         continue
-
                     for entry in feed.entries:
                         pub_date = self._parse_feed_date(entry)
                         if pub_date and pub_date < cutoff:
                             continue
-
                         paper = self._rss_entry_to_paper(entry, journal_info, pub_date)
                         if paper:
                             papers.append(paper)
-
-                    logger.debug("RSS: %d papers from %s", len(feed.entries), journal_name)
-
                 except httpx.HTTPStatusError as e:
-                    logger.warning(
-                        "RSS fetch failed for %s: HTTP %d — %s",
-                        journal_name,
-                        e.response.status_code,
-                        e,
-                    )
-                except httpx.RequestError as e:
-                    logger.warning(
-                        "RSS fetch failed for %s: network error — %s",
-                        journal_name,
-                        e,
-                    )
+                    logger.warning("RSS fetch failed for %s: HTTP %d", journal_name, e.response.status_code)
                 except Exception as e:
                     logger.warning("RSS fetch failed for %s: %s", journal_name, e)
-
-                # Polite delay between feeds to avoid rate limiting
                 await asyncio.sleep(random.uniform(1.0, 2.0))
 
         return papers
 
+    # ── NCPSSD (unchanged) ────────────────────────────────────────────
+
     async def _fetch_ncpssd(
         self, journals: list[dict], cutoff: date
     ) -> list[Paper]:
-        """Scrape NCPSSD for journal articles.
-
-        Note: NCPSSD uses 'gch' codes (journal identifiers) that need to be
-        manually mapped. For now, this is a best-effort attempt. Journals
-        that are also covered by OpenAlex will have coverage there.
-        """
+        """Scrape NCPSSD for journal articles."""
         papers: list[Paper] = []
 
-        # NCPSSD journal listing endpoint
-        # We attempt to find each journal by searching NCPSSD
         async with httpx.AsyncClient(
             timeout=30,
             headers={
@@ -223,7 +274,7 @@ class ChineseJournalFetcher(AbstractFetcher):
                         client, journal_info, cutoff
                     )
                     papers.extend(journal_papers)
-                    await asyncio.sleep(2)  # Polite delay between journals
+                    await asyncio.sleep(2)
                 except Exception as e:
                     logger.warning(
                         "NCPSSD scrape failed for %s: %s",
@@ -234,19 +285,11 @@ class ChineseJournalFetcher(AbstractFetcher):
         return papers
 
     async def _scrape_ncpssd_journal(
-        self,
-        client: httpx.AsyncClient,
-        journal_info: dict,
-        cutoff: date,
+        self, client: httpx.AsyncClient, journal_info: dict, cutoff: date,
     ) -> list[Paper]:
-        """Attempt to scrape a single journal from NCPSSD.
-
-        This is a best-effort implementation. NCPSSD may change its HTML
-        structure, require authentication, or block automated access.
-        """
+        """Attempt to scrape a single journal from NCPSSD."""
         journal_name = journal_info.get("name", "")
 
-        # Try searching for the journal on NCPSSD
         search_url = f"{NCPSSD_BASE}/journal/search"
         try:
             resp = await client.get(
@@ -261,11 +304,9 @@ class ChineseJournalFetcher(AbstractFetcher):
             logger.debug("NCPSSD search request failed for %s: %s", journal_name, e)
             return []
 
-        # Parse search results to find the journal page
         soup = BeautifulSoup(resp.text, "lxml")
         papers: list[Paper] = []
 
-        # Attempt to find article listings (selector will need tuning)
         for article_el in soup.select(".article-item, .paper-item, .list-item"):
             try:
                 paper = self._parse_ncpssd_article(article_el, journal_info)
@@ -280,10 +321,7 @@ class ChineseJournalFetcher(AbstractFetcher):
         self, article_el, journal_info: dict
     ) -> Paper | None:
         """Parse an NCPSSD article element into a Paper."""
-        # Title
-        title_el = (
-            article_el.select_one(".title a, .article-title a, h3 a, h4 a")
-        )
+        title_el = article_el.select_one(".title a, .article-title a, h3 a, h4 a")
         if not title_el:
             return None
 
@@ -295,7 +333,6 @@ class ChineseJournalFetcher(AbstractFetcher):
         if source_url and source_url.startswith("/"):
             source_url = f"{NCPSSD_BASE}{source_url}"
 
-        # Authors
         authors: list[Author] = []
         author_el = article_el.select_one(".author, .authors, .article-author")
         if author_el:
@@ -305,18 +342,15 @@ class ChineseJournalFetcher(AbstractFetcher):
                 if name:
                     authors.append(Author(name=name))
 
-        # Abstract
         abstract = None
         abstract_el = article_el.select_one(".abstract, .article-abstract, .summary")
         if abstract_el:
             abstract = abstract_el.get_text(strip=True)
 
-        # Keywords
         keywords: list[str] = []
         kw_el = article_el.select_one(".keywords, .article-keywords")
         if kw_el:
             kw_text = kw_el.get_text(strip=True)
-            # Remove "关键词:" / "Keywords:" prefix
             kw_text = kw_text.replace("关键词：", "").replace("关键词:", "").replace("Keywords:", "")
             keywords = [k.strip() for k in kw_text.replace("；", ";").split(";") if k.strip()]
 
@@ -333,6 +367,8 @@ class ChineseJournalFetcher(AbstractFetcher):
             source_url=source_url,
         )
 
+    # ── RSS entry mapping (unchanged) ─────────────────────────────────
+
     def _rss_entry_to_paper(
         self, entry, journal_info: dict, pub_date: date | None
     ) -> Paper | None:
@@ -341,7 +377,6 @@ class ChineseJournalFetcher(AbstractFetcher):
         if not title:
             return None
 
-        # Authors — RSS entries often have author field
         authors: list[Author] = []
         author_str = entry.get("author", "")
         if author_str:
@@ -350,11 +385,9 @@ class ChineseJournalFetcher(AbstractFetcher):
                 if name:
                     authors.append(Author(name=name))
 
-        # Abstract / summary
         abstract = None
         summary = entry.get("summary", "") or entry.get("description", "")
         if summary:
-            # Strip HTML tags
             soup = BeautifulSoup(summary, "lxml")
             abstract = soup.get_text(strip=True)
 
@@ -376,7 +409,6 @@ class ChineseJournalFetcher(AbstractFetcher):
     @staticmethod
     def _parse_feed_date(entry) -> date | None:
         """Parse date from a feed entry."""
-        # Try published_parsed (struct_time)
         time_tuple = entry.get("published_parsed") or entry.get("updated_parsed")
         if time_tuple:
             try:
@@ -384,12 +416,10 @@ class ChineseJournalFetcher(AbstractFetcher):
             except (IndexError, ValueError):
                 pass
 
-        # Try string dates
         for date_str in [entry.get("published", ""), entry.get("updated", "")]:
             if date_str:
                 try:
                     from datetime import datetime
-                    # Try various formats
                     for fmt in [
                         "%Y-%m-%dT%H:%M:%S%z",
                         "%Y-%m-%dT%H:%M:%S",
