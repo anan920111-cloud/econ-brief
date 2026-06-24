@@ -1,5 +1,8 @@
 """Chinese journal fetcher — multi-strategy: NCPSSD scraping + RSS."""
 
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 import asyncio
 import logging
 from datetime import date, timedelta
@@ -74,6 +77,7 @@ class ChineseJournalFetcher(AbstractFetcher):
         # 使用 httpx 客户端，添加更完整的请求头
         async with httpx.AsyncClient(
             timeout=30,
+            verify=False,  # ← 添加这一行，禁用 SSL 证书验证
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/rss+xml, application/xml, text/xml, */*",
