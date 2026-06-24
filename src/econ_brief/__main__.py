@@ -115,54 +115,56 @@ async def run_pipeline(
     # Filter by relevance — separate thresholds for EN and ZH
     # DeepSeek scores Chinese papers lower on average, so we use a lower
     # cutoff for zh papers to avoid unfairly filtering them out.
-    # Also enforce a minimum Chinese paper quota for Stage 2.
-    en_papers: list = []
-    zh_papers: list = []
+    # Also enforce a minimum Chinese paper quota that survives the cap.
+    en_qualified: list = []
+    zh_qualified: list = []
+    zh_rest: list = []  # zh papers below threshold (for quota fill)
     for p in scored_papers:
-        threshold = (
-            config.min_relevance_score_zh
-            if p.language == "zh"
-            else config.min_relevance_score
-        )
-        if (p.relevance_score or 0) >= threshold:
-            if p.language == "zh":
-                zh_papers.append(p)
+        if p.language == "zh":
+            if (p.relevance_score or 0) >= config.min_relevance_score_zh:
+                zh_qualified.append(p)
             else:
-                en_papers.append(p)
+                zh_rest.append(p)
+        else:
+            if (p.relevance_score or 0) >= config.min_relevance_score:
+                en_qualified.append(p)
 
-    # Fill Chinese quota: if not enough zh papers passed threshold,
-    # pull in the next-best Chinese papers by score
-    if len(zh_papers) < config.min_chinese_stage2:
-        # Collect zh papers that didn't make the cut, sorted by score
-        remaining_zh = sorted(
-            [p for p in scored_papers if p.language == "zh" and p not in zh_papers],
-            key=lambda p: p.relevance_score or 0,
-            reverse=True,
+    # Sort within each group
+    en_qualified.sort(key=lambda p: p.relevance_score or 0, reverse=True)
+    zh_qualified.sort(key=lambda p: p.relevance_score or 0, reverse=True)
+    zh_rest.sort(key=lambda p: p.relevance_score or 0, reverse=True)
+
+    # Fill Chinese quota from below-threshold papers if needed
+    zh_selected = list(zh_qualified)
+    zh_quota_fill = 0
+    while len(zh_selected) < config.min_chinese_stage2 and zh_rest:
+        zh_selected.append(zh_rest.pop(0))
+        zh_quota_fill += 1
+    if zh_quota_fill > 0:
+        logger.info(
+            "Chinese quota: added %d extra zh papers (below threshold) "
+            "to meet minimum of %d",
+            zh_quota_fill,
+            config.min_chinese_stage2,
         )
-        needed = config.min_chinese_stage2 - len(zh_papers)
-        zh_papers.extend(remaining_zh[:needed])
-        if needed > 0 and remaining_zh:
-            logger.info(
-                "Chinese quota: added %d extra zh papers (below threshold) "
-                "to meet minimum of %d",
-                min(needed, len(remaining_zh)),
-                config.min_chinese_stage2,
-            )
 
-    # Merge and sort by score
-    top_papers = en_papers + zh_papers
+    # Build final list: EN papers fill remaining slots after ZH quota
+    en_limit = max(0, config.max_stage2_papers - len(zh_selected))
+    en_selected = en_qualified[:en_limit]
+
+    top_papers = en_selected + zh_selected
     top_papers.sort(key=lambda p: p.relevance_score or 0, reverse=True)
-    top_papers = top_papers[: config.max_stage2_papers]
 
     logger.info(
-        "Papers above relevance threshold (EN≥%.1f, ZH≥%.1f, min_zh=%d): "
-        "%d (EN=%d, ZH=%d, capped at %d)",
+        "Papers selected (EN≥%.1f, ZH≥%.1f, min_zh=%d): "
+        "%d total (EN=%d, ZH=%d, quota_fill=%d, cap=%d)",
         config.min_relevance_score,
         config.min_relevance_score_zh,
         config.min_chinese_stage2,
         len(top_papers),
-        len([p for p in top_papers if p.language != "zh"]),
-        len([p for p in top_papers if p.language == "zh"]),
+        len(en_selected),
+        len(zh_selected),
+        zh_quota_fill,
         config.max_stage2_papers,
     )
 
