@@ -45,8 +45,8 @@ class Config:
         # Prompts
         self.prompts = PromptManager(prompts_path)
 
-        # Fetch settings — separate lookback for Chinese journals
-        self.lookback_days = int(os.environ.get("LOOKBACK_DAYS", "3"))
+        # Fetch settings — 30-day window for all sources
+        self.lookback_days = int(os.environ.get("LOOKBACK_DAYS", "30"))
         self.lookback_days_zh = int(os.environ.get("LOOKBACK_DAYS_ZH", "30"))
         self.openalex_email = os.environ.get("OPENALEX_EMAIL")
 
