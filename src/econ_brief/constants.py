@@ -195,6 +195,20 @@ CHINESE_JOURNALS = [
         "openalex_source_id": "S4306541491",  # 586 works, latest ~2020
         "cnki_rss": "https://rss.cnki.net/knavi/rss/ZNJJ?pcode=CJFD,CCJD",
     },
+    {
+        "name": "农业技术经济",
+        "name_en": "Journal of Agrotechnical Economics",
+        "issn": "1000-6370",
+        "tier": "chinese_top",
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/NYJS?pcode=CJFD,CCJD",
+    },
+    {
+        "name": "中国农村观察",
+        "name_en": "China Rural Survey",
+        "issn": "1006-4583",
+        "tier": "chinese_top",
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/ZNCG?pcode=CJFD,CCJD",
+    },
 ]
 
 

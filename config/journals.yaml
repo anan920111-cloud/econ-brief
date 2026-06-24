@@ -115,6 +115,18 @@ chinese_journals:
     has_rss: true
     cnki_rss: "https://rss.cnki.net/knavi/rss/ZNJJ?pcode=CJFD,CCJD"
     openalex_source_id: "S4306541491"
+  - name: "农业技术经济"
+    name_en: "Journal of Agrotechnical Economics"
+    issn: "1000-6370"
+    has_rss: true
+    cnki_rss: "https://rss.cnki.net/knavi/rss/NYJS?pcode=CJFD,CCJD"
+    openalex_source_id: null
+  - name: "中国农村观察"
+    name_en: "China Rural Survey"
+    issn: "1006-4583"
+    has_rss: true
+    cnki_rss: "https://rss.cnki.net/knavi/rss/ZNCG?pcode=CJFD,CCJD"
+    openalex_source_id: null
 
 # ArXiv categories to monitor
 arxiv_categories:
