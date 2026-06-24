@@ -94,7 +94,7 @@ chinese_journals:
     name_en: "Chinese Rural Economy"
     issn: "1002-8870"
     has_rss: true
-    rss_url: "https://zgncjj.ajcass.com/RSS/CN"
+    rss_url: "https://zgncjj.ajcass.com/#/"
 
 # ArXiv categories to monitor
 arxiv_categories:
