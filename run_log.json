@@ -1,0 +1,12 @@
+[
+  {
+    "date": "2026-06-24",
+    "timestamp": "2026-06-24T12:44:13.097385",
+    "papers_fetched": 114,
+    "papers_new": 63,
+    "papers_analyzed": 30,
+    "tokens_used": 91423,
+    "cost_estimate": 0.06335723,
+    "errors": []
+  }
+]
