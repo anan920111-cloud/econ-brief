@@ -18,34 +18,33 @@ async def fetch_all(
     intl_journals: list[dict],
     chinese_journals: list[dict],
     lookback_days: int = 3,
+    lookback_days_zh: int = 30,
     email: str | None = None,
 ) -> list[Paper]:
     """Run all fetchers concurrently and collect results.
 
     Args:
-        intl_journals: List of international journal configs (with issn, name, tier).
+        intl_journals: List of international journal configs.
         chinese_journals: List of Chinese journal configs.
-        lookback_days: How many days back to fetch.
+        lookback_days: Days back for international sources.
+        lookback_days_zh: Days back for Chinese journals (longer window).
         email: Email for OpenAlex polite pool.
 
     Returns:
         Combined list of all fetched Paper objects.
     """
-    fetchers: list[AbstractFetcher] = [
-        OpenAlexFetcher(
-            journals=intl_journals + chinese_journals,
-            email=email,
-        ),
-        ArxivFetcher(),
-        NBERFetcher(),
-        ChineseJournalFetcher(journals=chinese_journals),
+    fetchers: list[tuple[AbstractFetcher, int]] = [
+        (OpenAlexFetcher(journals=intl_journals + chinese_journals, email=email), lookback_days),
+        (ArxivFetcher(), lookback_days),
+        (NBERFetcher(), lookback_days),
+        (ChineseJournalFetcher(journals=chinese_journals), lookback_days_zh),
     ]
 
-    tasks = [asyncio.ensure_future(f.fetch(lookback_days)) for f in fetchers]
+    tasks = [asyncio.ensure_future(f.fetch(days)) for f, days in fetchers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     all_papers: list[Paper] = []
-    for fetcher, result in zip(fetchers, results):
+    for (fetcher, _days), result in zip(fetchers, results):
         if isinstance(result, Exception):
             logger.error(
                 "Fetcher %s failed: %s", fetcher.source_name(), result

@@ -66,6 +66,7 @@ async def run_pipeline(
         intl_journals=config.intl_journals,
         chinese_journals=config.chinese_journals,
         lookback_days=config.lookback_days,
+        lookback_days_zh=config.lookback_days_zh,
         email=config.openalex_email,
     )
 

@@ -45,8 +45,9 @@ class Config:
         # Prompts
         self.prompts = PromptManager(prompts_path)
 
-        # Fetch settings
+        # Fetch settings — separate lookback for Chinese journals
         self.lookback_days = int(os.environ.get("LOOKBACK_DAYS", "3"))
+        self.lookback_days_zh = int(os.environ.get("LOOKBACK_DAYS_ZH", "30"))
         self.openalex_email = os.environ.get("OPENALEX_EMAIL")
 
         # ── DeepSeek API settings ──────────────────────────────────
