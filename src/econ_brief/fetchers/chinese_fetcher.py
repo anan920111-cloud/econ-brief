@@ -71,28 +71,46 @@ class ChineseJournalFetcher(AbstractFetcher):
         """Fetch papers from Chinese journal RSS feeds."""
         papers: list[Paper] = []
 
-        for journal_name, rss_url in CHINESE_RSS_URLS.items():
-            journal_info = self._journal_names.get(journal_name)
-            if not journal_info:
-                continue
-
-            try:
-                feed = feedparser.parse(rss_url)
-                if feed.bozo:
-                    logger.warning("RSS parse error for %s: %s", journal_name, feed.bozo)
+        # 使用 httpx 客户端，添加更完整的请求头
+        async with httpx.AsyncClient(
+            timeout=30,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/rss+xml, application/xml, text/xml, */*",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            },
+        ) as client:
+            for journal_name, rss_url in CHINESE_RSS_URLS.items():
+                journal_info = self._journal_names.get(journal_name)
+                if not journal_info:
                     continue
 
-                for entry in feed.entries:
-                    pub_date = self._parse_feed_date(entry)
-                    if pub_date and pub_date < cutoff:
+                try:
+                    # 用 httpx 先获取 RSS 内容
+                    response = await client.get(rss_url, follow_redirects=True)
+                    response.raise_for_status()
+                    
+                    # 把获取到的内容交给 feedparser 解析
+                    feed = feedparser.parse(response.text)
+                    if feed.bozo:
+                        logger.warning("RSS parse error for %s: %s", journal_name, feed.bozo)
                         continue
 
-                    paper = self._rss_entry_to_paper(entry, journal_info, pub_date)
-                    if paper:
-                        papers.append(paper)
+                    for entry in feed.entries:
+                        pub_date = self._parse_feed_date(entry)
+                        if pub_date and pub_date < cutoff:
+                            continue
 
-            except Exception as e:
-                logger.warning("RSS fetch failed for %s: %s", journal_name, e)
+                        paper = self._rss_entry_to_paper(entry, journal_info, pub_date)
+                        if paper:
+                            papers.append(paper)
+                    
+                    logger.info("RSS fetched %d papers from %s", len(feed.entries), journal_name)
+
+                except Exception as e:
+                    logger.warning("RSS fetch failed for %s: %s", journal_name, e)
 
         return papers
 
