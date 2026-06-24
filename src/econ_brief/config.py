@@ -61,9 +61,13 @@ class Config:
         # Optional: use deepseek-reasoner for higher-quality analysis
         # self.analyzer_model = "deepseek-reasoner"
 
-        # Relevance filter
+        # Relevance filter — language-specific thresholds
+        # DeepSeek tends to score Chinese papers lower; use a separate threshold
         self.min_relevance_score = float(
             os.environ.get("MIN_RELEVANCE_SCORE", "6.0")
+        )
+        self.min_relevance_score_zh = float(
+            os.environ.get("MIN_RELEVANCE_SCORE_ZH", "4.0")
         )
         self.max_stage2_papers = int(
             os.environ.get("MAX_STAGE2_PAPERS", "30")

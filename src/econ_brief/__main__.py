@@ -112,19 +112,35 @@ async def run_pipeline(
     )
     scored_papers = scorer.score_papers(new_papers)
 
-    # Filter by relevance
-    top_papers = [
-        p
-        for p in scored_papers
-        if (p.relevance_score or 0) >= config.min_relevance_score
-    ]
+    # Filter by relevance — separate thresholds for EN and ZH
+    # DeepSeek scores Chinese papers lower on average, so we use a lower
+    # cutoff for zh papers to avoid unfairly filtering them out.
+    top_papers: list = []
+    en_count = zh_count = 0
+    for p in scored_papers:
+        threshold = (
+            config.min_relevance_score_zh
+            if p.language == "zh"
+            else config.min_relevance_score
+        )
+        if (p.relevance_score or 0) >= threshold:
+            top_papers.append(p)
+            if p.language == "zh":
+                zh_count += 1
+            else:
+                en_count += 1
+
     top_papers.sort(key=lambda p: p.relevance_score or 0, reverse=True)
     top_papers = top_papers[: config.max_stage2_papers]
 
     logger.info(
-        "Papers above relevance threshold (%.1f): %d (capped at %d)",
+        "Papers above relevance threshold (EN≥%.1f, ZH≥%.1f): %d "
+        "(EN=%d, ZH=%d, capped at %d)",
         config.min_relevance_score,
+        config.min_relevance_score_zh,
         len(top_papers),
+        en_count,
+        zh_count,
         config.max_stage2_papers,
     )
 
