@@ -1,10 +1,17 @@
-"""Chinese journal fetcher — multi-strategy: NCPSSD scraping + RSS."""
+"""Chinese journal fetcher — multi-strategy: RSS (via httpx) + NCPSSD scraping.
+
+CNKI RSS feeds are blocked (HTTP 418) from datacenter IPs (GitHub Actions, etc.).
+In CI environments, CNKI RSS is skipped automatically. Set FORCE_CHINESE_RSS=true
+to override. Local runs from Chinese residential IPs should work normally.
+"""
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import asyncio
 import logging
+import os
+import random
 from datetime import date, timedelta
 
 import feedparser
@@ -22,6 +29,29 @@ from econ_brief.fetchers.base import AbstractFetcher
 from econ_brief.models.paper import Author, Paper, PaperSource, JournalTier
 
 logger = logging.getLogger(__name__)
+
+# Browser-like User-Agent pool to rotate through — avoids CNKI 418 blocking
+_USER_AGENTS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+]
+
+
+def _is_ci_environment() -> bool:
+    """Detect if we're running in a CI/CD environment."""
+    return bool(
+        os.environ.get("CI")  # Generic CI indicator
+        or os.environ.get("GITHUB_ACTIONS")  # GitHub Actions
+        or os.environ.get("GITLAB_CI")  # GitLab CI
+        or os.environ.get("JENKINS_URL")  # Jenkins
+    )
+
+
+def _force_rss() -> bool:
+    """Check if the user explicitly wants RSS even in CI."""
+    return os.environ.get("FORCE_CHINESE_RSS", "").lower() in ("true", "1", "yes")
 
 
 class ChineseJournalFetcher(AbstractFetcher):
@@ -52,13 +82,26 @@ class ChineseJournalFetcher(AbstractFetcher):
         cutoff = self._cutoff_date(lookback_days)
         papers: list[Paper] = []
 
-        # Strategy 1: RSS feeds
-        rss_papers = await self._fetch_rss(cutoff)
-        papers.extend(rss_papers)
-        logger.info("Chinese RSS: %d papers", len(rss_papers))
+        # Strategy 1: RSS feeds (CNKI — blocked in CI environments)
+        in_ci = _is_ci_environment()
+        force = _force_rss()
+
+        if in_ci and not force:
+            logger.info(
+                "CI environment detected — skipping CNKI RSS feeds "
+                "(blocked by CNKI anti-bot protection). "
+                "Chinese papers will come from OpenAlex only. "
+                "Set FORCE_CHINESE_RSS=true to override, "
+                "or run locally from a Chinese IP for full coverage."
+            )
+        else:
+            if in_ci and force:
+                logger.info("FORCE_CHINESE_RSS set — attempting CNKI RSS in CI")
+            rss_papers = await self._fetch_rss(cutoff)
+            papers.extend(rss_papers)
+            logger.info("Chinese RSS: %d papers", len(rss_papers))
 
         # Strategy 2: NCPSSD scraping (for journals not covered by RSS)
-        # Run concurrently with a small delay to be polite
         rss_covered = set(CHINESE_RSS_URLS.keys())
         ncpssd_journals = [
             j for j in self.journals if j["name"] not in rss_covered
@@ -71,20 +114,30 @@ class ChineseJournalFetcher(AbstractFetcher):
         return papers
 
     async def _fetch_rss(self, cutoff: date) -> list[Paper]:
-        """Fetch papers from Chinese journal RSS feeds."""
+        """Fetch papers from Chinese journal RSS feeds using httpx.
+
+        Uses browser-like User-Agent headers to avoid CNKI 418 anti-bot
+        responses. feedparser.parse() is NOT called directly on URLs —
+        the feed content is fetched via httpx first, then parsed locally.
+        """
         papers: list[Paper] = []
 
-        # 使用 httpx 客户端，添加更完整的请求头
+        # Use a single httpx client with browser-mimicking headers
+        headers = {
+            "User-Agent": random.choice(_USER_AGENTS),
+            "Accept": "application/rss+xml, application/xml, text/xml, */*;q=0.9",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+
         async with httpx.AsyncClient(
             timeout=30,
-            verify=False,  # ← 添加这一行，禁用 SSL 证书验证
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/rss+xml, application/xml, text/xml, */*",
-                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-            },
+            verify=False,  # Disable SSL verification for CNKI compatibility
+            headers=headers,
+            follow_redirects=True,
+            http2=True,  # CNKI supports HTTP/2
         ) as client:
             for journal_name, rss_url in CHINESE_RSS_URLS.items():
                 journal_info = self._journal_names.get(journal_name)
@@ -92,14 +145,23 @@ class ChineseJournalFetcher(AbstractFetcher):
                     continue
 
                 try:
-                    # 用 httpx 先获取 RSS 内容
-                    response = await client.get(rss_url, follow_redirects=True)
-                    response.raise_for_status()
-                    
-                    # 把获取到的内容交给 feedparser 解析
-                    feed = feedparser.parse(response.text)
+                    resp = await client.get(rss_url)
+                    if resp.status_code == 418:
+                        logger.warning(
+                            "CNKI blocked RSS fetch for %s (418 anti-bot). "
+                            "This is CNKI's restriction, not a network issue. "
+                            "Consider using alternative sources.",
+                            journal_name,
+                        )
+                        continue
+                    resp.raise_for_status()
+
+                    # Parse the fetched XML/feed content locally
+                    feed = feedparser.parse(resp.text)
                     if feed.bozo:
-                        logger.warning("RSS parse error for %s: %s", journal_name, feed.bozo)
+                        logger.warning(
+                            "RSS parse error for %s: %s", journal_name, feed.bozo
+                        )
                         continue
 
                     for entry in feed.entries:
@@ -110,11 +172,27 @@ class ChineseJournalFetcher(AbstractFetcher):
                         paper = self._rss_entry_to_paper(entry, journal_info, pub_date)
                         if paper:
                             papers.append(paper)
-                    
-                    logger.info("RSS fetched %d papers from %s", len(feed.entries), journal_name)
 
+                    logger.debug("RSS: %d papers from %s", len(feed.entries), journal_name)
+
+                except httpx.HTTPStatusError as e:
+                    logger.warning(
+                        "RSS fetch failed for %s: HTTP %d — %s",
+                        journal_name,
+                        e.response.status_code,
+                        e,
+                    )
+                except httpx.RequestError as e:
+                    logger.warning(
+                        "RSS fetch failed for %s: network error — %s",
+                        journal_name,
+                        e,
+                    )
                 except Exception as e:
                     logger.warning("RSS fetch failed for %s: %s", journal_name, e)
+
+                # Polite delay between feeds to avoid rate limiting
+                await asyncio.sleep(random.uniform(1.0, 2.0))
 
         return papers
 
@@ -134,7 +212,9 @@ class ChineseJournalFetcher(AbstractFetcher):
         async with httpx.AsyncClient(
             timeout=30,
             headers={
-                "User-Agent": "econ-brief/0.1 (research automation; personal use)"
+                "User-Agent": random.choice(_USER_AGENTS),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             },
         ) as client:
             for journal_info in journals:

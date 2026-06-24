@@ -70,15 +70,32 @@ class OpenAlexFetcher(AbstractFetcher):
     async def _fetch_journal(
         self, issn: str, journal_info: dict, since: date
     ) -> list[Paper]:
-        """Fetch papers for a single journal ISSN."""
+        """Fetch papers for a single journal, by source_id or ISSN.
+
+        Chinese journals are looked up by OpenAlex source ID (more reliable
+        than ISSN matching in OpenAlex). International journals use ISSN.
+        """
         papers: list[Paper] = []
         tier = _TIER_MAP.get(journal_info.get("tier"))
+
+        # Chinese journals: prefer source_id lookup
+        source_id = journal_info.get("openalex_source_id")
+        if source_id:
+            source_filter = {
+                "primary_location": {
+                    "source": {"id": f"https://openalex.org/{source_id}"}
+                }
+            }
+        else:
+            source_filter = {
+                "primary_location": {"source": {"issn": issn}}
+            }
 
         try:
             results = (
                 Works()
                 .filter(
-                    primary_location={"source": {"issn": issn}},
+                    **source_filter,
                     from_publication_date=str(since),
                 )
                 .sort(publication_date="desc")

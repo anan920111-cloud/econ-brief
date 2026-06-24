@@ -126,63 +126,74 @@ CHINESE_JOURNALS = [
         "name_en": "Economic Research Journal",
         "issn": "0577-9154",
         "tier": "chinese_top",
-        "rss_url": None,
+        # OpenAlex: NOT FOUND (only 经济研究参考 exists, different journal)
+        # CNKI RSS: https://rss.cnki.net/knavi/rss/JJYJ?pcode=CJFD,CCJD (blocked in CI)
+        "openalex_source_id": None,
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/JJYJ?pcode=CJFD,CCJD",
     },
     {
         "name": "管理世界",
         "name_en": "Management World",
         "issn": "1002-5502",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306556525",  # 1008 works, latest ~2020
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/GLSJ?pcode=CJFD,CCJD",
     },
     {
         "name": "中国社会科学",
         "name_en": "Social Sciences in China",
         "issn": "1002-4921",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306542089",  # 650 works
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/ZSHK?pcode=CJFD,CCJD",
     },
     {
         "name": "数量经济技术经济研究",
         "name_en": "Journal of Quantitative & Technological Economics",
         "issn": "1000-3894",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306549816",  # 568 works, latest ~2020
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/SLJY?pcode=CJFD,CCJD",
     },
     {
         "name": "世界经济",
         "name_en": "The Journal of World Economy",
         "issn": "1002-9621",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306540996",  # 585 works, latest ~2021
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/SJJJ?pcode=CJFD,CCJD",
     },
     {
         "name": "中国工业经济",
         "name_en": "China Industrial Economics",
         "issn": "1006-480X",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306541737",  # 533 works, latest ~2020
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/GGYY?pcode=CJFD,CCJD",
     },
     {
         "name": "经济学季刊",
         "name_en": "China Economic Quarterly",
         "issn": "2095-1086",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306556909",  # 253 works
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/JJXU?pcode=CJFD,CCJD",
     },
     {
         "name": "金融研究",
         "name_en": "Journal of Financial Research",
         "issn": "1002-7246",
         "tier": "chinese_top",
-        "rss_url": None,
+        "openalex_source_id": "S4306559262",  # 1201 works, latest ~2021
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/JRYJ?pcode=CJFD,CCJD",
     },
     {
         "name": "中国农村经济",
         "name_en": "Chinese Rural Economy",
         "issn": "1002-8870",
         "tier": "chinese_top",
-        "rss_url": "https://zgncjj.ajcass.com/RSS/CN",
+        "openalex_source_id": "S4306541491",  # 586 works, latest ~2020
+        "cnki_rss": "https://rss.cnki.net/knavi/rss/ZNJJ?pcode=CJFD,CCJD",
     },
 ]
 
@@ -218,16 +229,25 @@ NBER_API_URL = (
 # NCPSSD base URL
 NCPSSD_BASE = "https://m.ncpssd.cn"
 
-# Chinese journal RSS feeds (知网 RSS - 用户确认地址)
+# Chinese journal RSS URLs — built from CHINESE_JOURNALS cnki_rss fields.
+#
+# IMPORTANT: CNKI (rss.cnki.net) blocks datacenter IPs with HTTP 418.
+# These RSS feeds will NOT work from GitHub Actions or any CI platform.
+# They ARE likely to work when running locally from a Chinese residential IP.
+#
+# The ChineseJournalFetcher detects CI environments (GITHUB_ACTIONS, CI=true)
+# and skips CNKI RSS to avoid noise. To force RSS fetch in CI, set:
+#   FORCE_CHINESE_RSS=true
 CHINESE_RSS_URLS: dict[str, str] = {
-    "经济研究": "https://rss.cnki.net/knavi/rss/JJYJ?pcode=CJFD,CCJD",
-    "管理世界": "https://rss.cnki.net/knavi/rss/GLSJ?pcode=CJFD,CCJD",
-    "中国社会科学": "https://rss.cnki.net/knavi/rss/ZSHK?pcode=CJFD,CCJD",
-    "数量经济技术经济研究": "https://rss.cnki.net/knavi/rss/SLJY?pcode=CJFD,CCJD",
-    "世界经济": "https://rss.cnki.net/knavi/rss/SJJJ?pcode=CJFD,CCJD",
-    "中国工业经济": "https://rss.cnki.net/knavi/rss/GGYY?pcode=CJFD,CCJD",
-    "经济学季刊": "https://rss.cnki.net/knavi/rss/JJXU?pcode=CJFD,CCJD",
-    "金融研究": "https://rss.cnki.net/knavi/rss/JRYJ?pcode=CJFD,CCJD",
-    "中国农村经济": "https://rss.cnki.net/knavi/rss/ZNJJ?pcode=CJFD,CCJD",
-    "财经研究": "https://qks.shufe.edu.cn/J/CJYJ/RSS/CN",
+    j["name"]: j["cnki_rss"]
+    for j in CHINESE_JOURNALS
+    if j.get("cnki_rss")
+}
+
+# OpenAlex source IDs for Chinese journals (used by OpenAlexFetcher as
+# a more reliable lookup than ISSN for Chinese venues).
+CHINESE_OPENALEX_IDS: dict[str, str] = {
+    j["name"]: j["openalex_source_id"]
+    for j in CHINESE_JOURNALS
+    if j.get("openalex_source_id")
 }
