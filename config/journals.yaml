@@ -61,40 +61,53 @@ chinese_journals:
   - name: "经济研究"
     name_en: "Economic Research Journal"
     issn: "0577-9154"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/JJYJ?pcode=CJFD,CCJD"
   - name: "管理世界"
     name_en: "Management World"
     issn: "1002-5502"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/GLSJ?pcode=CJFD,CCJD"
   - name: "中国社会科学"
     name_en: "Social Sciences in China"
     issn: "1002-4921"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/ZSHK?pcode=CJFD,CCJD"
   - name: "数量经济技术经济研究"
     name_en: "Journal of Quantitative & Technological Economics"
     issn: "1000-3894"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/SLJY?pcode=CJFD,CCJD"
   - name: "世界经济"
     name_en: "The Journal of World Economy"
     issn: "1002-9621"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/SJJJ?pcode=CJFD,CCJD"
   - name: "中国工业经济"
     name_en: "China Industrial Economics"
     issn: "1006-480X"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/GGYY?pcode=CJFD,CCJD"
   - name: "经济学季刊"
     name_en: "China Economic Quarterly"
     issn: "2095-1086"
-    has_rss: false
+    has_rss: true
+    rss_url: "https://rss.cnki.net/knavi/rss/JJXU?pcode=CJFD,CCJD"
   - name: "金融研究"
     name_en: "Journal of Financial Research"
     issn: "1002-7246"
-    has_rss: false
+    has_rss: true
+    rss_url: "http://rss.cnki.net/rss/rss.aspx?journal=JRYJ&Virtual=grid20&DBCode=CJFD"
   - name: "中国农村经济"
     name_en: "Chinese Rural Economy"
     issn: "1002-8870"
     has_rss: true
-    rss_url: "https://zgncjj.ajcass.com/#/"
+    rss_url: "https://rss.cnki.net/knavi/rss/ZNJJ?pcode=CJFD,CCJD"
+  - name: "财经研究"
+    name_en: "Journal of Finance and Economics"
+    issn: "1001-9952"
+    has_rss: true
+    rss_url: "https://qks.shufe.edu.cn/J/CJYJ/RSS/CN"
 
 # ArXiv categories to monitor
 arxiv_categories:
