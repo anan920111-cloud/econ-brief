@@ -70,10 +70,10 @@ class MarkdownGenerator:
         sections.append("---\n")
 
         tier_order = [
+            (JournalTier.CHINESE_TOP, "## 中文期刊 Chinese Journals"),
             (JournalTier.INTERNATIONAL_TOP5, "## 国际 Top 5 期刊 International Top 5"),
             (JournalTier.INTERNATIONAL_FIELD, "## 国际领域期刊 International Field Journals"),
             (JournalTier.PREPRINT, "## 工作论文与预印本 Working Papers & Preprints"),
-            (JournalTier.CHINESE_TOP, "## 中文期刊 Chinese Journals"),
         ]
 
         for tier, heading in tier_order:

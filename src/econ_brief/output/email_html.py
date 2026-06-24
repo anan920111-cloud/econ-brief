@@ -76,10 +76,10 @@ class EmailHTMLGenerator:
                 summary=summary,
                 groups=groups,
                 tier_labels={
+                    JournalTier.CHINESE_TOP: "中文期刊",
                     JournalTier.INTERNATIONAL_TOP5: "国际 Top 5 期刊",
                     JournalTier.INTERNATIONAL_FIELD: "国际领域期刊",
                     JournalTier.PREPRINT: "工作论文与预印本",
-                    JournalTier.CHINESE_TOP: "中文期刊",
                 },
             )
         except Exception as e:
@@ -149,10 +149,10 @@ class EmailHTMLGenerator:
         # Group papers by tier
         groups = self._group_by_tier(papers)
         tier_order = [
+            (JournalTier.CHINESE_TOP, "🇨🇳 中文期刊"),
             (JournalTier.INTERNATIONAL_TOP5, "🌍 国际 Top 5 期刊"),
             (JournalTier.INTERNATIONAL_FIELD, "📚 国际领域期刊"),
             (JournalTier.PREPRINT, "📝 工作论文与预印本"),
-            (JournalTier.CHINESE_TOP, "🇨🇳 中文期刊"),
         ]
 
         papers_sections = ""
