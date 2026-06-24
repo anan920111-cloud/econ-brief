@@ -52,6 +52,18 @@ jobs:
           pip install -e .
           pip install pyyaml requests feedparser lxml
 
+      - name: Debug - Check environment variables
+        run: |
+          echo "SMTP_HOST: $SMTP_HOST"
+          echo "SMTP_USERNAME: $SMTP_USERNAME"
+          echo "EMAIL_FROM: $EMAIL_FROM"
+          echo "EMAIL_TO: $EMAIL_TO"
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          
       - name: Generate Brief
         run: |
           if [ "${{ github.event.inputs.fetch_only }}" = "true" ]; then
@@ -68,6 +80,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          GH_PAT: ${{ secrets.GH_PAT }}
           LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
 
       - name: Commit and push changes
