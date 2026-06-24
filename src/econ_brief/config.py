@@ -70,11 +70,14 @@ class Config:
         self.min_relevance_score_zh = float(
             os.environ.get("MIN_RELEVANCE_SCORE_ZH", "4.0")
         )
-        # Guaranteed minimum Chinese papers in Stage 2 (regardless of score)
+        # Chinese papers: guaranteed minimum + hard cap for readability
         self.min_chinese_stage2 = int(
             os.environ.get("MIN_CHINESE_STAGE2", "5")
         )
-        # Maximum English papers in Stage 2 (to keep briefing readable)
+        self.max_chinese_stage2 = int(
+            os.environ.get("MAX_CHINESE_STAGE2", "10")
+        )
+        # English papers: hard cap
         self.max_english_stage2 = int(
             os.environ.get("MAX_ENGLISH_STAGE2", "10")
         )

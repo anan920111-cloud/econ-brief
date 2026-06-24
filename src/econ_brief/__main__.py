@@ -149,26 +149,32 @@ async def run_pipeline(
             config.min_chinese_stage2,
         )
 
+    # Cap Chinese papers too
+    zh_selected = zh_selected[: config.max_chinese_stage2]
+
     # Build final list: EN papers capped at max_english_stage2
     en_selected = en_qualified[: config.max_english_stage2]
 
-    # Also respect overall cap
+    # Respect overall cap
     total_limit = min(
         config.max_stage2_papers,
-        len(zh_selected) + config.max_english_stage2,
+        config.max_chinese_stage2 + config.max_english_stage2,
     )
     if len(zh_selected) + len(en_selected) > total_limit:
-        en_selected = en_selected[: max(0, total_limit - len(zh_selected))]
+        # Trim from EN first (zh priority)
+        excess = len(zh_selected) + len(en_selected) - total_limit
+        en_selected = en_selected[: max(0, len(en_selected) - excess)]
 
     top_papers = en_selected + zh_selected
     top_papers.sort(key=lambda p: p.relevance_score or 0, reverse=True)
 
     logger.info(
-        "Papers selected (EN≥%.1f ZH≥%.1f min_zh=%d max_en=%d): "
+        "Papers selected (EN≥%.1f ZH≥%.1f zh=%d~%d en≤%d): "
         "%d total (EN=%d ZH=%d quota_fill=%d)",
         config.min_relevance_score,
         config.min_relevance_score_zh,
         config.min_chinese_stage2,
+        config.max_chinese_stage2,
         config.max_english_stage2,
         len(top_papers),
         len(en_selected),
