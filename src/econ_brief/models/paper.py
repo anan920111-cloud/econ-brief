@@ -36,10 +36,11 @@ class Author:
 
 @dataclass
 class AnalysisResult:
-    """Structured 10-dimension analysis of a paper."""
+    """Structured analysis of a paper."""
 
     research_topic: str = ""
     methodology_data: str = ""
+    variables: str = ""  # Key variables and measurement methods
     innovation: str = ""
     theoretical_framework: str = ""
     empirical_strategy: str = ""
@@ -48,11 +49,14 @@ class AnalysisResult:
     limitations: str = ""
     extensions: str = ""
     china_relevance: str = ""
+    title_zh: str = ""  # Chinese translation of title (for EN papers)
+    affiliations_note: str = ""  # Author institutions (if not in metadata)
 
     def to_dict(self) -> dict:
         return {
             "research_topic": self.research_topic,
             "methodology_data": self.methodology_data,
+            "variables": self.variables,
             "innovation": self.innovation,
             "theoretical_framework": self.theoretical_framework,
             "empirical_strategy": self.empirical_strategy,
@@ -61,6 +65,8 @@ class AnalysisResult:
             "limitations": self.limitations,
             "extensions": self.extensions,
             "china_relevance": self.china_relevance,
+            "title_zh": self.title_zh,
+            "affiliations_note": self.affiliations_note,
         }
 
     @classmethod
@@ -68,6 +74,7 @@ class AnalysisResult:
         return cls(
             research_topic=d.get("research_topic", ""),
             methodology_data=d.get("methodology_data", ""),
+            variables=d.get("variables", ""),
             innovation=d.get("innovation", ""),
             theoretical_framework=d.get("theoretical_framework", ""),
             empirical_strategy=d.get("empirical_strategy", ""),
@@ -76,6 +83,8 @@ class AnalysisResult:
             limitations=d.get("limitations", ""),
             extensions=d.get("extensions", ""),
             china_relevance=d.get("china_relevance", ""),
+            title_zh=d.get("title_zh", ""),
+            affiliations_note=d.get("affiliations_note", ""),
         )
 
 
@@ -120,10 +129,21 @@ class Paper:
     scoring_reasoning: str = ""
     analysis: Optional[AnalysisResult] = None
 
+    # LLM-translated Chinese title (populated during Stage 2 for EN papers)
+    title_zh: Optional[str] = None
+
     @property
     def display_title(self) -> str:
-        """Best available title for display."""
-        return self.title_en or self.title
+        """Best available title for display.
+
+        Chinese papers: show Chinese title directly.
+        English papers: show English title + Chinese translation if available.
+        """
+        if self.language == "zh":
+            return self.title
+        if self.title_zh:
+            return f"{self.title}（{self.title_zh}）"
+        return self.title
 
     @property
     def author_string(self) -> str:

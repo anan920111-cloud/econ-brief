@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 _DIMENSION_NAMES = {
     "research_topic": "研究主题 Research Topic",
     "methodology_data": "方法与数据 Methodology & Data",
+    "variables": "变量与测度 Variables & Measurement",
     "innovation": "创新点 Innovation",
     "theoretical_framework": "理论框架 Theoretical Framework",
     "empirical_strategy": "实证策略 Empirical Strategy",

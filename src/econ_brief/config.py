@@ -75,11 +75,11 @@ class Config:
             os.environ.get("MIN_CHINESE_STAGE2", "5")
         )
         self.max_chinese_stage2 = int(
-            os.environ.get("MAX_CHINESE_STAGE2", "10")
+            os.environ.get("MAX_CHINESE_STAGE2", "5")
         )
         # English papers: hard cap
         self.max_english_stage2 = int(
-            os.environ.get("MAX_ENGLISH_STAGE2", "10")
+            os.environ.get("MAX_ENGLISH_STAGE2", "5")
         )
         self.max_stage2_papers = int(
             os.environ.get("MAX_STAGE2_PAPERS", "30")

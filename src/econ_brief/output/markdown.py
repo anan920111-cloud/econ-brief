@@ -15,6 +15,7 @@ _WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日
 _DIMENSION_NAMES = {
     "research_topic": "研究主题 Research Topic",
     "methodology_data": "方法与数据 Methodology & Data",
+    "variables": "变量与测度 Variables & Measurement",
     "innovation": "创新点 Innovation",
     "theoretical_framework": "理论框架 Theoretical Framework",
     "empirical_strategy": "实证策略 Empirical Strategy",
@@ -164,6 +165,8 @@ class MarkdownGenerator:
             lines.append(f"**作者:** {p.author_string}")
         if p.affiliation_string:
             lines.append(f"**机构:** {p.affiliation_string}")
+        if p.analysis and p.analysis.affiliations_note:
+            lines.append(f"**机构（补充）:** {p.analysis.affiliations_note}")
         if p.keywords:
             lines.append(f"**关键词:** {', '.join(p.keywords[:8])}")
         if p.topic_tags:

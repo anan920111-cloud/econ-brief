@@ -137,6 +137,9 @@ class DeepAnalyzer:
         paper.analysis = AnalysisResult.from_dict(
             result.get("analysis", {})
         )
+        # Copy title_zh back to paper for display
+        if paper.analysis.title_zh:
+            paper.title_zh = paper.analysis.title_zh
 
     @staticmethod
     def _parse_response(text: str, paper_index: int) -> dict:

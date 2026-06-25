@@ -356,7 +356,6 @@ class ChineseJournalFetcher(AbstractFetcher):
 
         return Paper(
             title=title,
-            title_en=journal_info.get("name_en"),
             authors=authors,
             journal=journal_info.get("name"),
             journal_tier=JournalTier.CHINESE_TOP,
@@ -395,7 +394,6 @@ class ChineseJournalFetcher(AbstractFetcher):
 
         return Paper(
             title=title,
-            title_en=journal_info.get("name_en"),
             authors=authors,
             journal=journal_info.get("name"),
             journal_tier=JournalTier.CHINESE_TOP,
