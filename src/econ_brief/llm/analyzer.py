@@ -129,7 +129,7 @@ class DeepAnalyzer:
             model=self.model,
             system_prompt=self.prompts.analyzer_system,
             user_content=user_prompt,
-            max_tokens=2048,
+            max_tokens=4096,
             temperature=0.3,
         )
 

@@ -41,26 +41,30 @@ class AnalysisResult:
     research_topic: str = ""
     methodology_data: str = ""
     variables: str = ""  # Key variables and measurement methods
+    mechanisms: str = ""  # Mechanism analysis: logic, data, measurement per mechanism
     innovation: str = ""
     theoretical_framework: str = ""
     empirical_strategy: str = ""
     key_findings: str = ""
+    robustness_highlights: str = ""  # Notable robustness/heterogeneity/extensions
     writing_approach: str = ""
     limitations: str = ""
     extensions: str = ""
     china_relevance: str = ""
     title_zh: str = ""  # Chinese translation of title (for EN papers)
-    affiliations_note: str = ""  # Author institutions (if not in metadata)
+    affiliations_note: str = ""  # Author institutions
 
     def to_dict(self) -> dict:
         return {
             "research_topic": self.research_topic,
             "methodology_data": self.methodology_data,
             "variables": self.variables,
+            "mechanisms": self.mechanisms,
             "innovation": self.innovation,
             "theoretical_framework": self.theoretical_framework,
             "empirical_strategy": self.empirical_strategy,
             "key_findings": self.key_findings,
+            "robustness_highlights": self.robustness_highlights,
             "writing_approach": self.writing_approach,
             "limitations": self.limitations,
             "extensions": self.extensions,
@@ -75,10 +79,12 @@ class AnalysisResult:
             research_topic=d.get("research_topic", ""),
             methodology_data=d.get("methodology_data", ""),
             variables=d.get("variables", ""),
+            mechanisms=d.get("mechanisms", ""),
             innovation=d.get("innovation", ""),
             theoretical_framework=d.get("theoretical_framework", ""),
             empirical_strategy=d.get("empirical_strategy", ""),
             key_findings=d.get("key_findings", ""),
+            robustness_highlights=d.get("robustness_highlights", ""),
             writing_approach=d.get("writing_approach", ""),
             limitations=d.get("limitations", ""),
             extensions=d.get("extensions", ""),
